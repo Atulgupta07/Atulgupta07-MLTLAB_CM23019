@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lab Assignment 1 - Tensor Creation</title>
+
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
+</head>
+<body>
+
+<h2>Lab Assignment 1: Tensor Creation (TensorFlow.js)</h2>
+<p>Open browser console to see output</p>
+
+<script>
+    // Ensure TensorFlow.js is loaded
+    if (typeof tf === "undefined") {
+        console.error("TensorFlow.js failed to load!");
+    } else {
+        console.log("TensorFlow.js version:", tf.version.tfjs);
+        console.log("Lab Assignment 1: Tensor Creation");
+
+        try {
+            // Scalar
+            const scalar = tf.scalar(10);
+            console.log("Scalar:");
+            scalar.print();
+
+            // Vector
+            const vector = tf.tensor1d([1, 2, 3, 4]);
+            console.log("Vector:");
+            vector.print();
+
+            // Matrix
+            const matrix = tf.tensor2d([
+                [1, 2],
+                [3, 4]
+            ]);
+            console.log("Matrix:");
+            matrix.print();
+
+            // Clean up memory (good practice)
+            scalar.dispose();
+            vector.dispose();
+            matrix.dispose();
+
+            console.log("Tensor creation completed successfully.");
+        } catch (error) {
+            console.error("Error during tensor creation:", error);
+        }
+    }
+</script>
+
+</body>
+</html>
