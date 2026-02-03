@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Linear Regression using TensorFlow.js</title>
+
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+
+<h2>Linear Regression with Synthetic Data (TF.js)</h2>
+<p>Open browser console to see output</p>
+
+<script>
+async function runLinearRegression() {
+
+    // 1️⃣ Create synthetic training data
+    const xTrain = tf.tensor2d([1, 2, 3, 4, 5], [5, 1]);
+    const yTrain = tf.tensor2d([3, 5, 7, 9, 11], [5, 1]);
+    // y = 2x + 1
+
+    // 2️⃣ Create Sequential Model
+    const model = tf.sequential();
+
+    // 3️⃣ Add Dense Layer
+    model.add(tf.layers.dense({
+        units: 1,
+        inputShape: [1]
+    }));
+
+    // 4️⃣ Compile the Model
+    model.compile({
+        optimizer: tf.train.sgd(0.01),
+        loss: 'meanSquaredError'
+    });
+
+    // 5️⃣ Train the Model
+    await model.fit(xTrain, yTrain, {
+        epochs: 200,
+        verbose: 0
+    });
+
+    // 6️⃣ Make Prediction
+    const xTest = tf.tensor2d([6], [1, 1]);
+    const prediction = model.predict(xTest);
+
+    prediction.print();
+}
+
+runLinearRegression();
+</script>
+
+</body>
+</html>

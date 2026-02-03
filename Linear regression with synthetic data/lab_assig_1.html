@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Regression with Numerical Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 800px; }
+        .stats { background: #f4f4f4; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #ddd; }
+        .code-text { font-family: monospace; color: #d63384; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>1. Train a regression model on synthetic data and plot predicted vs actual values.</h1>
+        <p><i>Open Console (F12) and type: <span class="code-text">addData(x, y)</span></i></p>
+        
+        <canvas id="chart1"></canvas>
+
+        <div class="stats" id="statsBox">
+            <h3>Numerical Calculations:</h3>
+            <p>Equation: <span id="eqn">y = 0x + 0</span></p>
+            <p>Mean Squared Error (MSE): <span id="mse">0.00</span></p>
+            <p>Data Points Count: <span id="count">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('chart1').getContext('2d');
+        
+        // Initial Synthetic Data
+        let points = [
+            {x: 1, y: 2.2}, {x: 2, y: 3.8}, {x: 3, y: 6.5}, {x: 4, y: 9.1}, {x: 5, y: 10.8}
+        ];
+
+        const myChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    { label: 'Actual Data', data: points, backgroundColor: '#3498db' },
+                    { label: 'Regression Line', data: [], type: 'line', borderColor: '#e74c3c', fill: false, pointRadius: 0 }
+                ]
+            }
+        });
+
+        // Numerical Calculation Function (Least Squares Method)
+        function calculateRegression() {
+            const n = points.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+
+            points.forEach(p => {
+                sumX += p.x;
+                sumY += p.y;
+                sumXY += p.x * p.y;
+                sumX2 += p.x * p.x;
+            });
+
+            // Calculate Slope (m) and Intercept (c)
+            // m = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX^2)
+            const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const c = (sumY - m * sumX) / n;
+
+            // Calculate MSE (Mean Squared Error)
+            let totalError = 0;
+            points.forEach(p => {
+                let prediction = m * p.x + c;
+                totalError += Math.pow(p.y - prediction, 2);
+            });
+            const mse = totalError / n;
+
+            // Update Line Chart
+            const minX = Math.min(...points.map(p => p.x)) - 1;
+            const maxX = Math.max(...points.map(p => p.x)) + 1;
+            myChart.data.datasets[1].data = [
+                {x: minX, y: m * minX + c},
+                {x: maxX, y: m * maxX + c}
+            ];
+            myChart.update();
+
+            // Update HTML text
+            document.getElementById('eqn').innerText = `y = ${m.toFixed(2)}x + ${c.toFixed(2)}`;
+            document.getElementById('mse').innerText = mse.toFixed(4);
+            document.getElementById('count').innerText = n;
+        }
+
+        // Console Access
+        window.addData = (x, y) => {
+            points.push({x: x, y: y});
+            myChart.data.datasets[0].data = points;
+            calculateRegression();
+            console.log(`Point added: (${x}, ${y}). Regression recalculated.`);
+        };
+
+        // Initial Run
+        calculateRegression();
+    </script>
+</body>
+</html>

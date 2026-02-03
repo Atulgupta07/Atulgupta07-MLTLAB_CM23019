@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generalization & Prediction</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; background-color: #f8f9fa; }
+        .container { width: 800px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; font-size: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .console-hint { background: #e8f4fd; border-left: 4px solid #3498db; padding: 10px; margin: 20px 0; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #dee2e6; text-align: center; }
+        th { background-color: #3498db; color: white; }
+        .match-high { color: #27ae60; font-weight: bold; }
+        .formula-box { background: #eee; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>3. Predict Unseen Inputs & Compare Results</h1>
+    
+    <div class="formula-box">
+        Current Model Formula: y = 3.5x + 12.0
+    </div>
+
+    <div class="console-hint">
+        <strong>Console Action:</strong> Open F12 and type <code>predict(inputValue)</code><br>
+        <em>Example: predict(10.5) or predict(2.0)</em>
+    </div>
+
+    <table id="predictionTable">
+        <thead>
+            <tr>
+                <th>Unseen Input (X)</th>
+                <th>Expected Result (Mathematical)</th>
+                <th>Model Prediction</th>
+                <th>Accuracy (%)</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    // Hypothetical weights learned during training
+    const m = 3.5;
+    const c = 12.0;
+
+    /**
+     * Function to be called from the console
+     * @param {number} x - The unseen input value
+     */
+    window.predict = (x) => {
+        if (isNaN(x)) {
+            console.error("Please enter a valid number.");
+            return;
+        }
+
+        // 1. Calculate Expected (Pure Math)
+        const expected = m * x + c;
+
+        // 2. Simulate Model Prediction (Adding a tiny realistic variance)
+        const variance = (Math.random() - 0.5) * 0.1; 
+        const predicted = expected + variance;
+
+        // 3. Calculate Accuracy
+        const accuracy = (100 - (Math.abs(expected - predicted) / expected) * 100).toFixed(2);
+
+        // 4. Update UI
+        const tableBody = document.getElementById('tableBody');
+        const row = tableBody.insertRow(0); // Add newest result to top
+        
+        row.innerHTML = `
+            <td>${x}</td>
+            <td>${expected.toFixed(2)}</td>
+            <td class="match-high">${predicted.toFixed(2)}</td>
+            <td>${accuracy}%</td>
+        `;
+
+        console.log(`Input: ${x} | Expected: ${expected.toFixed(2)} | Predicted: ${predicted.toFixed(2)}`);
+    };
+</script>
+
+</body>
+</html>

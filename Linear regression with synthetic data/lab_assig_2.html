@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Learning Rate Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 800px; text-align: center; }
+        .log-container { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left; font-family: monospace; }
+        .status-stable { color: #2ecc71; }
+        .status-diverge { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>2. Experiment with Learning Rates & Convergence</h1>
+        <p>Type <span style="color: #d63384; font-weight: bold;">testLR(value)</span> in the Console (F12) to simulate convergence.</p>
+        
+        <canvas id="convergenceChart"></canvas>
+
+        <div class="log-container" id="logBox">
+            > Console ready. Try testLR(0.01), testLR(0.1), or testLR(0.8)
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('convergenceChart').getContext('2d');
+        
+        const myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Epoch 0', 'Epoch 1', 'Epoch 2', 'Epoch 3', 'Epoch 4', 'Epoch 5', 'Epoch 6', 'Epoch 7', 'Epoch 8', 'Epoch 9'],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { title: { display: true, text: 'Loss (Error)' }, type: 'linear' },
+                    x: { title: { display: true, text: 'Iterations' } }
+                }
+            }
+        });
+
+        window.testLR = (lr) => {
+            let currentLoss = 100;
+            const lossHistory = [currentLoss];
+            let status = "Stable";
+            let statusClass = "status-stable";
+
+            // Simulation Logic
+            for (let i = 1; i < 10; i++) {
+                if (lr >= 0.5) {
+                    // Divergence: Loss grows exponentially
+                    currentLoss *= (1 + lr);
+                    status = "Diverged (Overshot)";
+                    statusClass = "status-diverge";
+                } else {
+                    // Convergence: Loss decreases
+                    currentLoss *= Math.max(0, (1 - lr * 5)); 
+                    status = "Converging";
+                }
+                lossHistory.push(currentLoss);
+            }
+
+            // Add to Chart
+            const color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+            myChart.data.datasets.push({
+                label: `LR: ${lr} (${status})`,
+                data: lossHistory,
+                borderColor: color,
+                backgroundColor: color,
+                fill: false,
+                tension: 0.1
+            });
+            myChart.update();
+
+            // Update Numerical Log
+            const logEntry = `<br><span class="${statusClass}">[LR ${lr}] Result: ${status}. Final Loss: ${currentLoss.toFixed(4)}</span>`;
+            document.getElementById('logBox').innerHTML += logEntry;
+            
+            console.log(`Simulation complete for LR: ${lr}. Current status: ${status}`);
+        };
+    </script>
+</body>
+</html>
