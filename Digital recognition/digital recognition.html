@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Digit Recognition CNN (TF.js)</title>
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <!-- TFJS Vis CDN for plots -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <style>
+        canvas { margin: 5px; border: 1px solid #ccc; }
+        .label { font-weight: bold; text-align: center; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+<h2>Digit Recognition CNN</h2>
+<p>Training CNN on MNIST (demo dataset) and visualizing predictions.</p>
+
+<script>
+let model;      // Global model
+let xsTest, ysTest; // Global test data
+let history;    // Training history for plotting
+
+async function runCNN() {
+
+    // 1️⃣ Generate demo training & test data
+    // Using small random numbers for demo. Replace with real MNIST for actual results
+    const xTrain = tf.randomUniform([200,28,28,1]);
+    const yTrain = tf.oneHot(tf.randomUniform([200],0,10,'int32'),10);
+
+    const xTest = tf.randomUniform([40,28,28,1]);
+    const yTest = tf.oneHot(tf.randomUniform([40],0,10,'int32'),10);
+
+    xsTest = xTest;
+    ysTest = yTest;
+
+    // 2️⃣ Build CNN model
+    model = tf.sequential();
+    model.add(tf.layers.conv2d({inputShape:[28,28,1], filters:16, kernelSize:3, activation:'relu'}));
+    model.add(tf.layers.maxPooling2d({poolSize:2, strides:2}));
+    model.add(tf.layers.conv2d({filters:32, kernelSize:3, activation:'relu'}));
+    model.add(tf.layers.maxPooling2d({poolSize:2, strides:2}));
+    model.add(tf.layers.flatten());
+    model.add(tf.layers.dense({units:64, activation:'relu'}));
+    model.add(tf.layers.dense({units:10, activation:'softmax'}));
+
+    // 3️⃣ Compile
+    model.compile({optimizer:'adam', loss:'categoricalCrossentropy', metrics:['accuracy']});
+
+    // 4️⃣ Train
+    history = await model.fit(xTrain, yTrain, {
+        batchSize:16,
+        epochs:5,
+        validationData:[xTest, yTest],
+        callbacks: tfvis.show.fitCallbacks(
+            { name: 'Training Loss & Accuracy', height: 300 },
+            ['loss','val_loss','acc','val_acc'],
+            { callbacks: ['onEpochEnd'] }
+        )
+    });
+
+    console.log("Training completed.");
+
+    // 5️⃣ Show 10 test images with predictions
+    for(let i=0; i<10; i++){
+        const imgTensor = xsTest.slice([i,0,0,0],[1,28,28,1]);
+        const canvas = document.createElement('canvas');
+        canvas.width = 28; canvas.height = 28;
+        document.body.appendChild(canvas);
+        await tf.browser.toPixels(imgTensor.reshape([28,28]), canvas);
+
+        const pred = model.predict(imgTensor).argMax(-1).dataSync()[0];
+        const trueLabel = ysTest.argMax(-1).dataSync()[i];
+
+        const label = document.createElement('div');
+        label.className = "label";
+        label.innerText = `Predicted: ${pred}, True: ${trueLabel}`;
+        document.body.appendChild(label);
+    }
+
+    console.log("Use predictX(index) in console to predict any test image (0-39).");
+}
+
+// 6️⃣ Console helper for predicting any test image
+function predictX(index) {
+    if(!model || !xsTest || !ysTest){
+        console.log("Model or test data not ready yet.");
+        return;
+    }
+    if(index < 0 || index >= xsTest.shape[0]){
+        console.log("Index out of bounds.");
+        return;
+    }
+
+    const image = xsTest.slice([index,0,0,0],[1,28,28,1]);
+    const pred = model.predict(image).argMax(-1).dataSync()[0];
+    const trueLabel = ysTest.argMax(-1).dataSync()[index];
+    console.log(`Predicted: ${pred}, True Label: ${trueLabel}`);
+}
+
+// Run the CNN
+runCNN();
+</script>
+
+</body>
+</html>
