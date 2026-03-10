@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Sentiment Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            width: 600px;
+            margin: auto;
+            border-radius: 8px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        h2 {
+            text-align: center;
+        }
+        #result {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h2>Text Sentiment Analysis</h2>
+
+    <p><b>Model:</b> Dense Neural Network (TensorFlow.js)</p>
+
+    <input type="text" id="userText" placeholder="Enter a sentence..." />
+    <button onclick="predictSentiment()">Analyze Sentiment</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+/* =========================
+   Dataset (Small & Clean)
+   ========================= */
+const sentences = [
+    "I love this movie",
+    "This product is terrible",
+    "Amazing experience",
+    "Worst service ever",
+    "I am very happy",
+    "I hate this",
+    "Excellent quality",
+    "Not satisfied at all",
+    "Very good performance",
+    "Completely disappointing"
+];
+
+const labels = [
+    1,0,1,0,1,0,1,0,1,0
+];
+
+/* =========================
+   Text Preprocessing
+   ========================= */
+const vocab = {};
+let vocabIndex = 1;
+
+function tokenize(text) {
+    return text.toLowerCase().split(" ");
+}
+
+sentences.forEach(s => {
+    tokenize(s).forEach(word => {
+        if (!vocab[word]) {
+            vocab[word] = vocabIndex++;
+        }
+    });
+});
+
+function vectorize(text) {
+    const vector = new Array(vocabIndex).fill(0);
+    tokenize(text).forEach(word => {
+        if (vocab[word]) {
+            vector[vocab[word]] = 1;
+        }
+    });
+    return vector;
+}
+
+/* =========================
+   Prepare Training Data
+   ========================= */
+const xs = tf.tensor2d(sentences.map(s => vectorize(s)));
+const ys = tf.tensor2d(labels, [labels.length, 1]);
+
+/* =========================
+   Build Dense Model
+   ========================= */
+const model = tf.sequential();
+
+model.add(tf.layers.dense({
+    units: 16,
+    activation: "relu",
+    inputShape: [vocabIndex]
+}));
+
+model.add(tf.layers.dense({
+    units: 1,
+    activation: "sigmoid"
+}));
+
+model.compile({
+    optimizer: "adam",
+    loss: "binaryCrossentropy",
+    metrics: ["accuracy"]
+});
+
+/* =========================
+   Train Model
+   ========================= */
+(async function trainModel() {
+    await model.fit(xs, ys, {
+        epochs: 40,
+        verbose: 0
+    });
+    console.log("Model trained");
+})();
+
+/* =========================
+   Prediction
+   ========================= */
+async function predictSentiment() {
+    const text = document.getElementById("userText").value;
+    const input = tf.tensor2d([vectorize(text)]);
+    const prediction = model.predict(input);
+    const score = prediction.dataSync()[0];
+
+    let sentiment = score > 0.5 ? "Positive 😊" : "Negative 😞";
+
+    document.getElementById("result").innerHTML =
+        `Sentiment: ${sentiment}<br>
+         Confidence Score: ${score.toFixed(2)}`;
+}
+</script>
+</body>
+</html>
