@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Sentiment Analysis – RNN</title>
+
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            width: 650px;
+            margin: auto;
+            border-radius: 8px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        h2 {
+            text-align: center;
+        }
+        #result {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h2>Text Sentiment Analysis</h2>
+    <p><b>Model:</b> Simple RNN (TensorFlow.js)</p>
+
+    <input type="text" id="userText" placeholder="Enter a sentence..." />
+    <button onclick="predictSentiment()">Analyze Sentiment</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+/* =========================
+   Dataset
+   ========================= */
+const sentences = [
+    "i love this movie",
+    "this product is terrible",
+    "amazing experience",
+    "worst service ever",
+    "i am very happy",
+    "i hate this",
+    "excellent quality",
+    "not satisfied at all",
+    "very good performance",
+    "completely disappointing"
+];
+
+const labels = [1,0,1,0,1,0,1,0,1,0];
+
+/* =========================
+   Tokenization
+   ========================= */
+const vocab = {};
+let vocabIndex = 1;
+const maxLen = 5;
+
+sentences.forEach(s => {
+    s.split(" ").forEach(word => {
+        if (!vocab[word]) {
+            vocab[word] = vocabIndex++;
+        }
+    });
+});
+
+function encodeSentence(sentence) {
+    const tokens = sentence.toLowerCase().split(" ");
+    const encoded = tokens.map(w => vocab[w] || 0);
+
+    while (encoded.length < maxLen) encoded.push(0);
+    return encoded.slice(0, maxLen);
+}
+
+/* =========================
+   Prepare Data
+   ========================= */
+const xs = tf.tensor2d(sentences.map(s => encodeSentence(s)));
+const ys = tf.tensor2d(labels, [labels.length, 1]);
+
+/* =========================
+   Build RNN Model
+   ========================= */
+const model = tf.sequential();
+
+model.add(tf.layers.embedding({
+    inputDim: vocabIndex + 1,
+    outputDim: 8,
+    inputLength: maxLen
+}));
+
+model.add(tf.layers.simpleRNN({
+    units: 16,
+    activation: "tanh"
+}));
+
+model.add(tf.layers.dense({
+    units: 1,
+    activation: "sigmoid"
+}));
+
+model.compile({
+    optimizer: "adam",
+    loss: "binaryCrossentropy",
+    metrics: ["accuracy"]
+});
+
+/* =========================
+   Train Model
+   ========================= */
+(async function trainModel() {
+    await model.fit(xs, ys, {
+        epochs: 50,
+        verbose: 0
+    });
+    console.log("RNN Model Trained");
+})();
+
+/* =========================
+   Prediction
+   ========================= */
+function predictSentiment() {
+    const text = document.getElementById("userText").value;
+    const encoded = encodeSentence(text);
+    const input = tf.tensor2d([encoded]);
+
+    const prediction = model.predict(input);
+    const score = prediction.dataSync()[0];
+
+    const sentiment = score > 0.5 ? "Positive 😊" : "Negative 😞";
+
+    document.getElementById("result").innerHTML =
+        `Sentiment: ${sentiment}<br>
+         Confidence Score: ${score.toFixed(2)}`;
+}
+</script>
+</body>
+</html>
