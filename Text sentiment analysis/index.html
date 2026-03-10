@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Practical 3 - Text Sentiment Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            padding: 30px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        ul {
+            margin-top: 15px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        a {
+            text-decoration: none;
+            color: #2980b9;
+            font-weight: bold;
+        }
+        a:hover {
+            color: #1c5980;
+        }
+        .section {
+            margin-top: 25px;
+        }
+        .highlight {
+            background: #eef6ff;
+            padding: 15px;
+            border-left: 4px solid #2980b9;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Practical 3: Text Sentiment Analysis</h1>
+    <p><strong>Course Outcome:</strong> CO2 – Analyze</p>
+
+    <div class="section">
+        <h2>Objective</h2>
+        <p>
+            To classify text as <strong>Positive</strong> or <strong>Negative</strong> 
+            using deep learning models. The practical involves training a custom 
+            Recurrent Neural Network (RNN), testing it on custom sentences, 
+            and comparing its performance with a simple Dense network.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Pre-trained Sentiment Model (Node.js Implementation)</h2>
+        <div class="highlight">
+            The pre-trained sentiment model is implemented using 
+            <strong>TensorFlow.js with Node.js backend</strong> 
+            inside the <code>pretrained</code> folder.
+            <br><br>
+            Run using:
+            <br>
+            <code>node app.js</code>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Lab Assignments</h2>
+        <ul>
+            <li>
+                <a href="LabAssignment1/index.html">
+                    Lab Assignment 1 – Train RNN Sentiment Classifier
+                </a>
+            </li>
+            <li>
+                <a href="LabAssignment2/index.html">
+                    Lab Assignment 2 – Test Custom Sentences & Confidence Analysis
+                </a>
+            </li>
+            <li>
+                <a href="LabAssignment3/index.html">
+                    Lab Assignment 3 – RNN vs Dense Network Comparison
+                </a>
+            </li>
+        </ul>
+    </div>
+
+</div>
+
+</body>
+</html>
