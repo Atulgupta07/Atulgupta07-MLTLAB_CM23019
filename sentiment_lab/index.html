@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sentiment Analysis Lab – TensorFlow.js</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- Header -->
+    <header>
+      <h1>Sentiment Analysis Lab</h1>
+      <span id="tf-status" class="badge badge-warning">⏳ Loading TF.js…</span>
+    </header>
+
+    <!-- Tab Bar -->
+    <nav class="tab-bar">
+      <button class="tab active" data-tab="train">🏋️ Train</button>
+      <button class="tab" data-tab="test">🔍 Test</button>
+      <button class="tab" data-tab="compare">📊 Compare</button>
+    </nav>
+
+    <!-- ── TRAIN TAB ────────────────────────────────────── -->
+    <section id="tab-train" class="tab-content active">
+
+      <div class="card">
+        <h2>Training Dataset <span class="count-badge">30 sentences</span></h2>
+        <p class="hint">15 positive ✅ and 15 negative ❌ sentences used to train both models.</p>
+        <div id="dataset-preview" class="dataset-grid"></div>
+      </div>
+
+      <div class="model-grid">
+
+        <div class="model-card rnn-card">
+          <div class="model-header">
+            <span class="dot blue"></span>
+            <strong>RNN — LSTM Model</strong>
+          </div>
+          <code class="arch-line">Embedding(vocab,16) → LSTM(32) → Dense(1,sigmoid)</code>
+          <div id="rnn-status" class="epoch-status">Not trained yet</div>
+          <div class="progress-track"><div id="rnn-bar" class="progress-fill blue-fill"></div></div>
+        </div>
+
+        <div class="model-card dense-card">
+          <div class="model-header">
+            <span class="dot green"></span>
+            <strong>Dense — Bag-of-Words Model</strong>
+          </div>
+          <code class="arch-line">Input(vocabSize) → Dense(32,relu) → Dropout(0.3) → Dense(1,sigmoid)</code>
+          <div id="dense-status" class="epoch-status">Not trained yet</div>
+          <div class="progress-track"><div id="dense-bar" class="progress-fill green-fill"></div></div>
+        </div>
+
+      </div>
+
+      <button id="btn-train" class="btn-primary" onclick="trainBoth()">
+        ▶ Train Both Models (20 epochs)
+      </button>
+
+      <div id="train-log" class="log-box">Waiting to start training…</div>
+
+    </section>
+
+    <!-- ── TEST TAB ─────────────────────────────────────── -->
+    <section id="tab-test" class="tab-content">
+
+      <div class="card">
+        <h2>Test Custom Sentences</h2>
+        <p class="hint">Enter one sentence per line, then click Analyze.</p>
+        <textarea id="test-input" rows="5" placeholder="I absolutely loved this product!
+This was a terrible experience.
+The service was okay I guess.
+Fantastic quality, very happy with my purchase.
+Worst thing I ever bought."></textarea>
+        <button id="btn-analyze" class="btn-primary" disabled onclick="analyzeText()">
+          Analyze (train models first)
+        </button>
+      </div>
+
+      <div id="results-rnn" class="card results-card" style="display:none;">
+        <h2><span class="dot blue"></span> RNN (LSTM) Results</h2>
+        <div id="rnn-results-list"></div>
+      </div>
+
+      <div id="results-dense" class="card results-card" style="display:none;">
+        <h2><span class="dot green"></span> Dense (BoW) Results</h2>
+        <div id="dense-results-list"></div>
+      </div>
+
+    </section>
+
+    <!-- ── COMPARE TAB ───────────────────────────────────── -->
+    <section id="tab-compare" class="tab-content">
+
+      <div class="compare-grid">
+
+        <div class="card metric-card rnn-card">
+          <div class="model-header">
+            <span class="dot blue"></span><strong>RNN — LSTM</strong>
+          </div>
+          <div class="metrics-row">
+            <div class="metric-box">
+              <div class="metric-label">Train Accuracy</div>
+              <div class="metric-value" id="c-rnn-acc">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Final Loss</div>
+              <div class="metric-value" id="c-rnn-loss">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Parameters</div>
+              <div class="metric-value" id="c-rnn-params">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card metric-card dense-card">
+          <div class="model-header">
+            <span class="dot green"></span><strong>Dense — BoW</strong>
+          </div>
+          <div class="metrics-row">
+            <div class="metric-box">
+              <div class="metric-label">Train Accuracy</div>
+              <div class="metric-value" id="c-dense-acc">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Final Loss</div>
+              <div class="metric-value" id="c-dense-loss">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Parameters</div>
+              <div class="metric-value" id="c-dense-params">—</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="card">
+        <h2>Accuracy &amp; Loss over Epochs</h2>
+        <div style="position:relative; width:100%; height:300px;">
+          <canvas id="compare-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Architecture Analysis</h2>
+        <div id="arch-notes" class="arch-notes">
+          Train both models first to see a detailed comparison here.
+        </div>
+      </div>
+
+    </section>
+
+  </div><!-- /#app -->
+
+  <script src="js/data.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+
+</body>
+</html>
