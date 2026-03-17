@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Webcam Classification Overlay</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080c16;
+  --card:     #0d1220;
+  --border:   #1c2640;
+  --accent:   #00d9ff;
+  --green:    #00ff88;
+  --red:      #ff4060;
+  --yellow:   #ffcc00;
+  --purple:   #a855f7;
+  --text:     #e8edf8;
+  --muted:    #3d4d6e;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Inter', sans-serif;
+  --display:  'Orbitron', sans-serif;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Animated background grid */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,217,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,217,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0,217,255,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 90% 90%, rgba(168,85,247,0.06) 0%, transparent 60%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ── Page ───────────────────────────────────────────── */
+.page {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center;
+  padding: 36px 16px 60px;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+  animation: fadeDown 0.5s ease both;
+}
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(0,217,255,0.2);
+  background: rgba(0,217,255,0.05);
+  padding: 4px 14px; border-radius: 99px;
+  margin-bottom: 12px;
+}
+.eyebrow .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+  animation: blink 1.5s infinite;
+}
+
+h1 {
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 5vw, 3rem);
+  font-weight: 900; letter-spacing: 3px;
+  color: var(--text); margin-bottom: 6px;
+}
+h1 span { color: var(--accent); }
+
+.subtitle {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--muted); letter-spacing: 1px;
+}
+
+/* ── Main wrapper ─────────────────────────────────── */
+.main {
+  width: 100%; max-width: 900px;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 18px;
+  animation: fadeUp 0.5s 0.1s ease both;
+}
+@media(max-width:700px){ .main { grid-template-columns: 1fr; } }
+
+/* ── Video card ───────────────────────────────────── */
+.video-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.vc-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.vc-title {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.rec {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); transition: all 0.3s;
+}
+.rec.on { background: var(--red); box-shadow: 0 0 8px var(--red); animation: blink 0.8s infinite; }
+
+.live-pill {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 4px;
+  background: rgba(255,64,96,0.1);
+  border: 1px solid rgba(255,64,96,0.25);
+  color: var(--red); opacity: 0; transition: opacity 0.3s;
+}
+.live-pill.show { opacity: 1; }
+
+/* Video + canvas overlay wrapper */
+.video-wrap {
+  position: relative;
+  background: #000;
+  cursor: crosshair;
+}
+
+.video-wrap video {
+  width: 100%; display: block;
+  transform: scaleX(-1);  /* mirror */
+}
+
+/* Canvas draws detection boxes on top */
+.video-wrap canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* Idle overlay */
+.idle-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  background: rgba(8,12,22,0.92);
+  font-family: var(--mono); color: var(--muted);
+  font-size: 13px; transition: opacity 0.3s;
+}
+.idle-overlay .idle-icon { font-size: 3.5rem; animation: float 3s ease-in-out infinite; }
+
+/* Scanning flash overlay */
+.scan-flash {
+  position: absolute; inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: 0;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 40px rgba(0,217,255,0.2);
+  transition: opacity 0.15s;
+}
+.scan-flash.active { opacity: 1; }
+
+/* HUD label bottom */
+.hud-bottom {
+  position: absolute; bottom: 12px; left: 12px; right: 12px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+  pointer-events: none; z-index: 10;
+}
+
+.hud-chip {
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--accent);
+  border-radius: 6px; padding: 5px 12px;
+  font-family: var(--mono); font-size: 12px;
+  color: var(--accent); backdrop-filter: blur(4px);
+  white-space: nowrap;
+  animation: chipIn 0.3s ease both;
+}
+
+.hud-chip.green { border-color: var(--green); color: var(--green); }
+.hud-chip.yellow { border-color: var(--yellow); color: var(--yellow); }
+
+/* ── Scan button (big, centered below video) ──────── */
+.vc-footer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 10px;
+}
+
+.btn {
+  flex: 1; padding: 13px;
+  border: none; border-radius: 8px;
+  font-family: var(--display); font-size: 0.85rem;
+  letter-spacing: 2px; cursor: pointer;
+  display: flex; align-items: center;
+  justify-content: center; gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-scan {
+  background: var(--accent); color: #000; font-weight: 700;
+  position: relative; overflow: hidden;
+}
+.btn-scan::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.4s;
+}
+.btn-scan:hover:not(:disabled)::after { transform: translateX(100%); }
+.btn-scan:hover:not(:disabled) { background: #00eeff; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,217,255,0.4); }
+.btn-scan:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+.btn-stop {
+  background: rgba(255,64,96,0.1); color: var(--red);
+  border: 1px solid rgba(255,64,96,0.25); flex: 0 0 auto; padding: 13px 20px;
+}
+.btn-stop:hover:not(:disabled) { background: rgba(255,64,96,0.2); }
+.btn-stop:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Side panel ───────────────────────────────────── */
+.side { display: flex; flex-direction: column; gap: 14px; }
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+
+.panel-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-label::before {
+  content: ''; width: 3px; height: 12px;
+  background: var(--accent); border-radius: 99px;
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* Status row */
+.status-row {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 7px;
+}
+.s-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0; transition: all 0.3s;
+}
+.s-dot.loading { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: blink 0.9s infinite; }
+.s-dot.ready   { background: var(--green);  box-shadow: 0 0 8px var(--green); }
+.s-dot.error   { background: var(--red); }
+.s-dot.scanning{ background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: blink 0.4s infinite; }
+
+/* Mini stats */
+.mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mini-box { text-align: center; }
+.mini-val {
+  font-family: var(--display); font-size: 1.6rem;
+  color: var(--accent); display: block; line-height: 1;
+}
+.mini-val.red { color: var(--red); }
+.mini-key {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); margin-top: 4px;
+}
+
+/* Scan progress bar */
+.progress-wrap {
+  height: 4px; background: var(--border);
+  border-radius: 99px; overflow: hidden; margin: 10px 0 6px;
+}
+.progress-fill {
+  height: 100%; background: var(--accent);
+  border-radius: 99px; width: 0%;
+  transition: width 0.2s ease;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.progress-text {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); text-align: center;
+}
+
+/* Result cards */
+.result-list { display: flex; flex-direction: column; gap: 8px; }
+
+.result-item {
+  position: relative; overflow: hidden;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  animation: chipIn 0.4s ease both;
+  transition: border-color 0.3s;
+}
+.result-item.r0 { border-color: rgba(0,217,255,0.4); }
+.result-item.r1 { border-color: rgba(0,255,136,0.25); }
+.result-item.r2 { border-color: rgba(255,204,0,0.2); }
+
+.ri-fill {
+  position: absolute; left:0; top:0; bottom:0;
+  border-radius: 8px; opacity: 0.07; width: 0%;
+  transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+}
+.r0 .ri-fill { background: var(--accent); }
+.r1 .ri-fill { background: var(--green); }
+.r2 .ri-fill { background: var(--yellow); }
+
+.ri-content {
+  position: relative; z-index: 1;
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+}
+
+.ri-name {
+  font-size: 13px; font-weight: 600;
+  text-transform: capitalize; flex: 1;
+}
+
+.ri-pct {
+  font-family: var(--display); font-size: 1.1rem; line-height: 1; flex-shrink: 0;
+}
+.r0 .ri-pct { color: var(--accent); }
+.r1 .ri-pct { color: var(--green); }
+.r2 .ri-pct { color: var(--yellow); }
+
+.ri-bar {
+  height: 3px; background: var(--border);
+  border-radius: 99px; overflow: hidden; margin-top: 6px;
+}
+.ri-bar-fill {
+  height: 100%; border-radius: 99px; width: 0%;
+  transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+}
+.r0 .ri-bar-fill { background: var(--accent); }
+.r1 .ri-bar-fill { background: var(--green); }
+.r2 .ri-bar-fill { background: var(--yellow); }
+
+.placeholder {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--muted); text-align: center;
+  padding: 16px 0; line-height: 2;
+}
+
+/* Hint bar */
+.hint-bar {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  padding: 10px 14px;
+  background: rgba(0,217,255,0.04);
+  border: 1px solid rgba(0,217,255,0.1);
+  border-radius: 8px;
+}
+.hint-bar .hint-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+/* ── Spinner ────────────────────────────────────────── */
+.spinner {
+  display: inline-block; width: 13px; height: 13px;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Animations ─────────────────────────────────────── */
+@keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+@keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0.25} }
+@keyframes float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+@keyframes spin     { to{transform:rotate(360deg)} }
+@keyframes chipIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes scanLine {
+  0%   { top: 0%; opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent);
+  pointer-events: none; display: none; z-index: 20;
+}
+.scan-line.active { display: block; animation: scanLine 0.6s ease forwards; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="eyebrow"><span class="dot"></span>COCO-SSD · TensorFlow.js</div>
+    <h1>WEBCAM <span>CLASSIFIER</span></h1>
+    <p class="subtitle">// Click SCAN to capture · Averaged result · Accurate detection</p>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main">
+
+    <!-- Video panel -->
+    <div class="video-card">
+      <div class="vc-header">
+        <div class="vc-title">
+          <div class="rec" id="rec"></div>
+          CAMERA FEED
+        </div>
+        <div class="live-pill" id="livePill">● LIVE</div>
+      </div>
+
+      <div class="video-wrap" id="videoWrap">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="boxCanvas"></canvas>
+
+        <!-- Scanning effects -->
+        <div class="scan-flash" id="scanFlash"></div>
+        <div class="scan-line" id="scanLine"></div>
+
+        <!-- Idle state -->
+        <div class="idle-overlay" id="idleOverlay">
+          <div class="idle-icon">📷</div>
+          <span>Click START CAMERA first</span>
+        </div>
+
+        <!-- HUD chips at bottom -->
+        <div class="hud-bottom" id="hudBottom"></div>
+      </div>
+
+      <div class="vc-footer">
+        <button class="btn btn-scan" id="mainBtn" onclick="handleMainBtn()">
+          ▶ START CAMERA
+        </button>
+        <button class="btn btn-stop" id="stopBtn" onclick="stopAll()" disabled>■</button>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side">
+
+      <!-- Model status -->
+      <div class="panel">
+        <div class="panel-label">Model Status</div>
+        <div class="status-row">
+          <div class="s-dot loading" id="sDot"></div>
+          <span id="sText" style="font-size:11px">Loading COCO-SSD…</span>
+        </div>
+
+        <!-- Scan progress -->
+        <div class="progress-wrap" style="margin-top:12px">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text" id="progressText">—</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel">
+        <div class="panel-label">Session Stats</div>
+        <div class="mini-grid">
+          <div class="mini-box">
+            <span class="mini-val" id="scanCount">0</span>
+            <div class="mini-key">Scans</div>
+          </div>
+          <div class="mini-box">
+            <span class="mini-val red" id="topConf">—</span>
+            <div class="mini-key">Confidence</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="panel" style="flex:1">
+        <div class="panel-label">Detection Results</div>
+        <div id="resultList">
+          <div class="placeholder">Start camera then<br>click SCAN to detect</div>
+        </div>
+      </div>
+
+      <!-- Hint -->
+      <div class="hint-bar">
+        <span class="hint-icon">💡</span>
+        Hold object steady. Good lighting = better results.
+      </div>
+    </div>
+
+
+  </div>
+</div>
+
+<script>
+  let model=null,stream=null,cameraOn=false,scanning=false,voteMap={},totalFrames=0;
+
+  const video=document.getElementById("webcam"),boxCanvas=document.getElementById("boxCanvas"),
+    mainBtn=document.getElementById("mainBtn"),stopBtn=document.getElementById("stopBtn"),
+    sDot=document.getElementById("sDot"),sText=document.getElementById("sText"),
+    resultList=document.getElementById("resultList"),scanCount=document.getElementById("scanCount"),
+    topConf=document.getElementById("topConf"),progressFill=document.getElementById("progressFill"),
+    progressText=document.getElementById("progressText"),hudBottom=document.getElementById("hudBottom"),
+    idleOverlay=document.getElementById("idleOverlay"),rec=document.getElementById("rec"),
+    livePill=document.getElementById("livePill"),scanFlash=document.getElementById("scanFlash"),
+    videoWrap=document.getElementById("videoWrap");
+
+  /* Load COCO-SSD lite — fast + accurate */
+  (async()=>{
+    try{
+      sText.textContent="⏳ Loading model…";
+      model=await cocoSsd.load({base:"lite_mobilenet_v2"});
+      sDot.className="s-dot ready";
+      sText.textContent="✅ Ready — start camera";
+    }catch(e){
+      sDot.className="s-dot error";
+      sText.textContent="❌ "+e.message;
+    }
+  })();
+
+  function handleMainBtn(){
+    if(!cameraOn) startCamera();
+    else startScanning();
+  }
+
+  async function startCamera(){
+    if(!model){sText.textContent="⏳ Model loading…";return;}
+    mainBtn.disabled=true;
+    mainBtn.innerHTML='<span class="spinner"></span> STARTING…';
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}}});
+      video.srcObject=stream;
+      await new Promise(r=>{video.onloadedmetadata=()=>video.play().then(r);});
+      await new Promise(r=>{if(video.readyState>=4){r();return;}video.oncanplaythrough=r;});
+      cameraOn=true;
+      idleOverlay.style.display="none";
+      stopBtn.disabled=false;
+      mainBtn.disabled=false;
+      mainBtn.innerHTML="▶ START SCANNING";
+      sText.textContent="✅ Camera on — click START SCANNING";
+    }catch(e){
+      mainBtn.disabled=false;
+      mainBtn.innerHTML="▶ START CAMERA";
+      sText.textContent="❌ "+e.message;
+    }
+  }
+
+  /* START CONTINUOUS SCAN — runs until user clicks STOP */
+  function startScanning(){
+    if(!model||!cameraOn||scanning)return;
+    scanning=true; voteMap={}; totalFrames=0;
+    mainBtn.disabled=true;
+    mainBtn.innerHTML="🔴 SCANNING…";
+    stopBtn.innerHTML="⏹ STOP & SHOW RESULT";
+    rec.classList.add("on");
+    livePill.classList.add("show");
+    sDot.className="s-dot scanning";
+    sText.textContent="🔴 Scanning… click STOP when ready";
+    progressFill.style.width="0%";
+    progressText.textContent="0 frames analysed";
+    resultList.innerHTML='<div class="placeholder">🔴 Scanning…<br>Show object to camera<br>then click STOP</div>';
+    hudBottom.innerHTML="";
+    topConf.textContent="—";
+    scanCount.textContent="0";
+    scanFlash.classList.add("active");
+    setTimeout(()=>scanFlash.classList.remove("active"),300);
+    detectLoop();
+  }
+
+  /* MAIN DETECTION LOOP — every frame via rAF */
+  async function detectLoop(){
+    if(!scanning)return;
+    if(video.readyState<2||video.videoWidth===0){requestAnimationFrame(detectLoop);return;}
+    try{
+      const dets=await model.detect(video);
+      drawBoxes(dets);
+
+      /* VOTING: accumulate score+count per class */
+      dets.forEach(d=>{
+        if(d.score<0.30)return;
+        if(!voteMap[d.class])voteMap[d.class]={scoreSum:0,count:0,maxScore:0};
+        voteMap[d.class].scoreSum+=d.score;
+        voteMap[d.class].count++;
+        voteMap[d.class].maxScore=Math.max(voteMap[d.class].maxScore,d.score);
+      });
+
+      totalFrames++;
+      scanCount.textContent=totalFrames;
+      progressText.textContent=totalFrames+" frames analysed";
+      progressFill.style.transition="none";
+      progressFill.style.width=((totalFrames%60)/60*100)+"%";
+
+      /* Live HUD preview every 8 frames */
+      if(totalFrames%8===0){
+        const best=getRanked()[0];
+        if(best){
+          hudBottom.innerHTML=`<div class="hud-chip">${EMOJI[best.cls]||"🔍"} ${best.cls} — ${(best.finalScore*100).toFixed(0)}% <span style="font-size:9px;opacity:0.6">×${best.count}f</span></div>`;
+        }
+      }
+    }catch(e){console.warn(e);}
+    requestAnimationFrame(detectLoop);
+  }
+
+  /* STOP BUTTON — if scanning show result, else kill camera */
+  function stopAll(){
+    if(scanning){
+      scanning=false;
+      mainBtn.disabled=false;
+      mainBtn.innerHTML="🔄 SCAN AGAIN";
+      stopBtn.innerHTML="■ STOP CAMERA";
+      rec.classList.remove("on");
+      livePill.classList.remove("show");
+      progressFill.style.width="100%";
+      if(totalFrames===0){sText.textContent="⚠️ No frames";return;}
+      const results=getRanked().slice(0,3);
+      if(results.length===0){
+        sDot.className="s-dot ready";
+        sText.textContent="🤔 Nothing detected";
+        resultList.innerHTML='<div class="placeholder">Nothing detected.<br>Better lighting or closer.</div>';
+        hudBottom.innerHTML='<div class="hud-chip">❓ Nothing</div>';
+        topConf.textContent="—";
+        return;
+      }
+      sDot.className="s-dot ready";
+      sText.textContent="✅ "+results[0].cls;
+      topConf.textContent=(results[0].finalScore*100).toFixed(1)+"%";
+      progressText.textContent="Analysed "+totalFrames+" frames total";
+      renderResults(results);
+      renderFinalHUD(results);
+      return;
+    }
+    /* Full stop */
+    cameraOn=false;
+    if(stream)stream.getTracks().forEach(t=>t.stop());
+    stream=null; video.srcObject=null;
+    const ctx=boxCanvas.getContext("2d");
+    ctx.clearRect(0,0,boxCanvas.width,boxCanvas.height);
+    idleOverlay.style.display="flex";
+    rec.classList.remove("on"); livePill.classList.remove("show");
+    hudBottom.innerHTML=""; stopBtn.disabled=true; stopBtn.innerHTML="■";
+    mainBtn.disabled=false; mainBtn.innerHTML="▶ START CAMERA";
+    sDot.className="s-dot ready"; sText.textContent="✅ Ready";
+    progressFill.style.width="0%"; progressText.textContent="—";
+    resultList.innerHTML='<div class="placeholder">Click Start Camera.</div>';
+    topConf.textContent="—"; scanCount.textContent="0";
+  }
+
+  /* RANKING — combines avg confidence + detection frequency + peak score */
+  function getRanked(){
+    return Object.entries(voteMap)
+      .map(([cls,v])=>{
+        const avgConf=v.scoreSum/v.count;
+        const frequency=v.count/Math.max(totalFrames,1);
+        const finalScore=(avgConf*0.45)+(frequency*0.40)+(v.maxScore*0.15);
+        return{cls,avgConf,frequency,maxScore:v.maxScore,count:v.count,finalScore};
+      })
+      .filter(r=>r.count>=2)
+      .sort((a,b)=>b.finalScore-a.finalScore);
+  }
+
+  /* DRAW BOXES on canvas */
+  const BOX_COLORS=["#00d9ff","#00ff88","#ffcc00","#a855f7","#ff4060"];
+  function drawBoxes(dets){
+    const ctx=boxCanvas.getContext("2d");
+    boxCanvas.width=videoWrap.offsetWidth;
+    boxCanvas.height=videoWrap.offsetHeight;
+    const sx=boxCanvas.width/video.videoWidth, sy=boxCanvas.height/video.videoHeight;
+    ctx.clearRect(0,0,boxCanvas.width,boxCanvas.height);
+    dets.forEach((d,i)=>{
+      if(d.score<0.30)return;
+      const col=BOX_COLORS[i%BOX_COLORS.length];
+      let[x,y,w,h]=d.bbox;
+      x=boxCanvas.width-(x+w)*sx; y=y*sy; w=w*sx; h=h*sy;
+      ctx.shadowColor=col; ctx.shadowBlur=6;
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.strokeRect(x,y,w,h);
+      ctx.shadowBlur=0;
+      const cs=12; ctx.lineWidth=3;
+      [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([cx,cy])=>{
+        const dx=cx===x?cs:-cs, dy=cy===y?cs:-cs;
+        ctx.beginPath(); ctx.moveTo(cx+dx,cy); ctx.lineTo(cx,cy); ctx.lineTo(cx,cy+dy); ctx.stroke();
+      });
+      const lbl=`${EMOJI[d.class]||"🔍"} ${d.class} ${(d.score*100).toFixed(0)}%`;
+      ctx.font="bold 12px 'JetBrains Mono',monospace";
+      const tw=ctx.measureText(lbl).width, py=Math.max(y-22,0);
+      ctx.fillStyle="rgba(0,0,0,0.8)";
+      if(ctx.roundRect) ctx.roundRect(x,py,tw+16,22,4); else ctx.rect(x,py,tw+16,22);
+      ctx.fill();
+      ctx.fillStyle=col; ctx.fillRect(x,py,3,22);
+      ctx.fillText(lbl,x+8,py+16);
+    });
+  }
+
+  /* RENDER RESULT CARDS */
+  const RANK_CLASS=["r0","r1","r2"];
+  function renderResults(results){
+    resultList.innerHTML="";
+    results.forEach((r,i)=>{
+      const pct=(r.finalScore*100).toFixed(1);
+      const freq=(r.frequency*100).toFixed(0);
+      const emoji=EMOJI[r.cls]||"🔍";
+      const item=document.createElement("div");
+      item.className=`result-item ${RANK_CLASS[i]}`;
+      item.style.animationDelay=(i*0.1)+"s";
+      item.innerHTML=`
+        <div class="ri-fill"></div>
+        <div class="ri-content">
+          <div class="ri-name">${emoji} ${r.cls}
+            <small style="display:block;font-size:10px;color:var(--muted);margin-top:2px">
+              ${freq}% of frames · ${r.count} detections · peak ${(r.maxScore*100).toFixed(0)}%
+            </small>
+          </div>
+          <div class="ri-pct">${pct}%</div>
+        </div>
+        <div class="ri-bar"><div class="ri-bar-fill"></div></div>`;
+      resultList.appendChild(item);
+      requestAnimationFrame(()=>{
+        item.querySelector(".ri-fill").style.width=pct+"%";
+        item.querySelector(".ri-bar-fill").style.width=pct+"%";
+      });
+    });
+  }
+
+  function renderFinalHUD(results){
+    hudBottom.innerHTML="";
+    results.slice(0,2).forEach((r,i)=>{
+      const chip=document.createElement("div");
+      chip.className="hud-chip"+(i===1?" yellow":"");
+      chip.textContent=`${EMOJI[r.cls]||"🔍"} ${r.cls}  ${(r.finalScore*100).toFixed(0)}%`;
+      chip.style.animationDelay=(i*0.1)+"s";
+      hudBottom.appendChild(chip);
+    });
+  }
+
+  const EMOJI={
+    person:"🧑",bicycle:"🚲",car:"🚗",motorcycle:"🏍️",airplane:"✈️",bus:"🚌",
+    train:"🚂",truck:"🚚",boat:"⛵","traffic light":"🚦","fire hydrant":"🚒",
+    "stop sign":"🛑",bench:"🪑",bird:"🐦",cat:"🐱",dog:"🐶",horse:"🐴",
+    sheep:"🐑",cow:"🐄",elephant:"🐘",bear:"🐻",zebra:"🦓",giraffe:"🦒",
+    backpack:"🎒",umbrella:"☂️",handbag:"👜",tie:"👔",suitcase:"🧳",
+    frisbee:"🥏",skis:"🎿",snowboard:"🏂","sports ball":"⚽",kite:"🪁",
+    "baseball bat":"⚾","baseball glove":"🧤",skateboard:"🛹",surfboard:"🏄",
+    "tennis racket":"🎾",bottle:"🍾","wine glass":"🍷",cup:"☕",fork:"🍴",
+    knife:"🔪",spoon:"🥄",bowl:"🥣",banana:"🍌",apple:"🍎",sandwich:"🥪",
+    orange:"🍊",broccoli:"🥦",carrot:"🥕","hot dog":"🌭",pizza:"🍕",
+    donut:"🍩",cake:"🎂",chair:"🪑",couch:"🛋️","potted plant":"🪴",
+    bed:"🛏️","dining table":"🍽️",toilet:"🚽",tv:"📺",laptop:"💻",
+    mouse:"🖱️",remote:"🎮",keyboard:"⌨️","cell phone":"📱",microwave:"📡",
+    oven:"🔥",toaster:"🍞",sink:"🚰",refrigerator:"🧊",book:"📚",
+    clock:"🕐",vase:"🏺",scissors:"✂️","teddy bear":"🧸","hair drier":"💨",
+    toothbrush:"🪥"
+  };
+</script>
+</body>
+</html>

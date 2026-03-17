@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Task 3 – FPS & Performance Analysis</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+  <link rel="stylesheet" href="../assets/css/style.css"/>
+  <style>
+    .perf-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    @media(max-width:580px){ .perf-grid { grid-template-columns: 1fr; } }
+
+    .phase-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .phase--cam   { background: rgba(17,138,178,0.15); color: var(--blue); }
+    .phase--inf   { background: rgba(6,214,160,0.15);  color: var(--accent); }
+    .phase--idle  { background: rgba(74,85,104,0.3);   color: var(--muted); }
+
+    .inference-time-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .inference-time-fill {
+      height: 100%;
+      background: var(--accent2);
+      border-radius: 99px;
+      transition: width 0.4s;
+    }
+
+    .analysis-table { width:100%; border-collapse:collapse; }
+    .analysis-table td {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .analysis-table td:first-child { color: var(--muted); width: 55%; }
+    .analysis-table td:last-child  { color: var(--text); font-weight:700; text-align:right; }
+    .analysis-table tr:last-child td { border-bottom:none; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="badge">CO3 – Apply · Task 3</div>
+    <h1>FPS Measurement &amp;<br><span class="hl2">Performance Analysis</span></h1>
+    <p class="subtitle">// Real-time FPS tracking · Inference latency · Performance impact report</p>
+  </header>
+
+  <!-- Concept -->
+  <div class="card card--red">
+    <div class="sec-label">Performance Metrics Tracked</div>
+    <div class="chips-row">
+      <span class="chip chip--info">Current FPS</span>
+      <span class="chip chip--yellow">Avg FPS</span>
+      <span class="chip chip--blue">Inference Time (ms)</span>
+      <span class="chip chip--info">Min / Max FPS</span>
+    </div>
+    <div class="code-block">
+<span class="cm">// Measure inference latency per frame</span>
+<span class="kw">const</span> t0 = performance.<span class="fn">now</span>();
+<span class="kw">const</span> preds = <span class="kw">await</span> model.<span class="fn">classify</span>(video, <span class="str">3</span>);
+<span class="kw">const</span> inferenceMs = performance.<span class="fn">now</span>() - t0;
+
+<span class="cm">// FPS = 1000ms / time-between-frames</span>
+<span class="kw">const</span> fps = <span class="str">1000</span> / (performance.<span class="fn">now</span>() - lastFrameTime);
+lastFrameTime = performance.<span class="fn">now</span>();
+    </div>
+  </div>
+
+  <!-- Live stats -->
+  <div class="stats-grid">
+    <div class="stat-box">
+      <span class="stat-val" id="s-fps">0</span>
+      <div class="stat-label">Current FPS</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val stat-val--yellow" id="s-avg">—</span>
+      <div class="stat-label">Avg FPS</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val stat-val--blue" id="s-inf">—</span>
+      <div class="stat-label">Inference (ms)</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val stat-val--red" id="s-frames">0</span>
+      <div class="stat-label">Total Frames</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val" id="s-min" style="color:var(--accent2)">—</span>
+      <div class="stat-label">Min FPS</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val" id="s-max">—</span>
+      <div class="stat-label">Max FPS</div>
+    </div>
+  </div>
+
+  <!-- Video + FPS chart -->
+  <div class="perf-grid">
+
+    <!-- Webcam -->
+    <div class="card card--accent" style="margin-bottom:0">
+      <div class="sec-label">
+        <span class="live-dot" id="liveDot" style="display:none"></span>
+        Webcam Feed
+      </div>
+      <div class="video-wrapper">
+        <video id="video" playsinline muted autoplay></video>
+        <div class="hud-label" id="hudLabel" style="display:none">—</div>
+        <div class="hud-fps"   id="hudFPS"   style="display:none">FPS: —</div>
+        <div class="video-placeholder" id="placeholder">
+          <div class="icon">📊</div>
+          <span>Start to measure</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inference time gauge -->
+    <div class="card card--red" style="margin-bottom:0">
+      <div class="sec-label">Inference Latency</div>
+
+      <div style="margin-bottom:14px">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px">
+          Time to classify one frame
+        </div>
+        <div style="font-size:2.8rem;font-weight:900;color:var(--accent2);font-family:var(--mono)" id="bigInf">—</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">milliseconds</div>
+        <div class="inference-time-bar">
+          <div class="inference-time-fill" id="infBar" style="width:0%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px">
+          <span>0ms</span><span>100ms</span>
+        </div>
+      </div>
+
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px">
+        Performance rating
+      </div>
+      <div id="perfRating" style="font-family:var(--mono);font-size:13px;color:var(--muted)">—</div>
+    </div>
+  </div>
+
+  <!-- FPS Sparkline Chart -->
+  <div class="card" style="margin-top:22px">
+    <div class="sec-label">FPS Over Time</div>
+    <div class="fps-chart-wrap">
+      <div class="fps-chart-title">LIVE FPS CHART — dashed line = 30fps target</div>
+      <canvas class="fps-chart" id="fpsChart" style="height:90px"></canvas>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card card--accent">
+    <div class="sec-label">Controls</div>
+    <div class="btn-row">
+      <button class="btn btn--primary" id="startBtn">Start Measurement</button>
+      <button class="btn btn--danger"  id="stopBtn" disabled>Stop</button>
+      <button class="btn btn--ghost"   id="resetBtn">Reset Stats</button>
+    </div>
+    <p class="status-text" id="status">⏳ Loading MobileNetV2…</p>
+  </div>
+
+  <!-- Analysis report -->
+  <div class="card card--yellow">
+    <div class="sec-label">Performance Analysis Report</div>
+    <table class="analysis-table" id="analysisTable">
+      <tr><td>Model</td><td>MobileNetV2 (α=1.0)</td></tr>
+      <tr><td>Average FPS</td><td id="r-avg">—</td></tr>
+      <tr><td>Min / Max FPS</td><td id="r-minmax">—</td></tr>
+      <tr><td>Average Inference Time</td><td id="r-inf">—</td></tr>
+      <tr><td>Total Frames Processed</td><td id="r-frames">—</td></tr>
+      <tr><td>Real-time Capable? (≥15 FPS)</td><td id="r-capable">—</td></tr>
+      <tr><td>Performance Impact</td><td id="r-impact">—</td></tr>
+      <tr><td>Recommendation</td><td id="r-recommendation">—</td></tr>
+    </table>
+  </div>
+
+  <!-- Detection log -->
+  <div class="card">
+    <div class="sec-label">Detection Log</div>
+    <div class="log-box" id="logBox">
+      <div class="log-entry" style="color:var(--muted)">Log will appear here once started…</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Task 3 · FPS Measurement &amp; Performance Analysis · TensorFlow.js · CO3 – Apply
+</footer>
+
+<script src="../assets/js/utils.js"></script>
+<script>
+  let model      = null;
+  let stream     = null;
+  let running    = false;
+  let rafId      = null;
+  let totalFrames= 0;
+  let infTimes   = [];
+  const fpsTracker = new FPSTracker(120);
+  const logEntries = [];
+
+  const video       = document.getElementById("video");
+  const placeholder = document.getElementById("placeholder");
+  const startBtn    = document.getElementById("startBtn");
+  const stopBtn     = document.getElementById("stopBtn");
+  const resetBtn    = document.getElementById("resetBtn");
+  const statusEl    = document.getElementById("status");
+  const liveDot     = document.getElementById("liveDot");
+  const hudLabel    = document.getElementById("hudLabel");
+  const hudFPS      = document.getElementById("hudFPS");
+  const fpsChart    = document.getElementById("fpsChart");
+  const bigInf      = document.getElementById("bigInf");
+  const infBar      = document.getElementById("infBar");
+  const perfRating  = document.getElementById("perfRating");
+
+  const sFPS    = document.getElementById("s-fps");
+  const sAvg    = document.getElementById("s-avg");
+  const sInf    = document.getElementById("s-inf");
+  const sFrames = document.getElementById("s-frames");
+  const sMin    = document.getElementById("s-min");
+  const sMax    = document.getElementById("s-max");
+
+  /* Load model */
+  (async () => {
+    try {
+      model = await loadMobileNet((msg) => setStatus(statusEl, msg));
+    } catch (e) {
+      setStatus(statusEl, "❌ " + e.message);
+    }
+  })();
+
+  /* Start */
+  startBtn.addEventListener("click", async () => {
+    if (!model) return;
+    startBtn.disabled = true;
+    try {
+      stream  = await startWebcam(video);
+      placeholder.style.display = "none";
+      hudLabel.style.display = "block";
+      hudFPS.style.display   = "block";
+      liveDot.style.display  = "inline-block";
+      stopBtn.disabled = false;
+      running = true;
+      setStatus(statusEl, "🟢 Measuring performance… keep moving objects in front of camera.");
+      inferenceLoop();
+    } catch (e) {
+      setStatus(statusEl, "❌ Camera: " + e.message);
+      startBtn.disabled = false;
+    }
+  });
+
+  /* Stop */
+  stopBtn.addEventListener("click", () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    stopWebcam(stream);
+    video.srcObject = null;
+    placeholder.style.display = "flex";
+    hudLabel.style.display = "none";
+    hudFPS.style.display   = "none";
+    liveDot.style.display  = "none";
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
+    setStatus(statusEl, "⏹ Stopped. See analysis report below.");
+    updateReport();
+  });
+
+  /* Reset */
+  resetBtn.addEventListener("click", () => {
+    fpsTracker.reset();
+    infTimes = [];
+    totalFrames = 0;
+    logEntries.length = 0;
+    updateStats(0, 0);
+    document.getElementById("logBox").innerHTML =
+      '<div class="log-entry" style="color:var(--muted)">Stats reset.</div>';
+  });
+
+  /* Main inference loop */
+  async function inferenceLoop() {
+    if (!running) return;
+
+    fpsTracker.tick();
+    totalFrames++;
+
+    const t0   = performance.now();
+    let preds  = [];
+
+    try {
+      preds = await model.classify(video, 3);
+    } catch (_) {}
+
+    const infMs = performance.now() - t0;
+    infTimes.push(infMs);
+    if (infTimes.length > 200) infTimes.shift();
+
+    updateStats(fpsTracker, infMs);
+    updateHUD(preds);
+    updateChart();
+    addLog(preds, fpsTracker.current, infMs);
+
+    rafId = requestAnimationFrame(inferenceLoop);
+  }
+
+  /* Update live stat boxes */
+  function updateStats(fps, infMs) {
+    const f = typeof fps === "object" ? fps : fpsTracker;
+    sFPS.textContent    = f.current || 0;
+    sFPS.style.color    = fpsColor(f.current || 0);
+    sAvg.textContent    = f.average || "—";
+    sMin.textContent    = f.min === Infinity ? "—" : f.min;
+    sMax.textContent    = f.max || "—";
+    sFrames.textContent = totalFrames;
+
+    const avgInf = infTimes.length
+      ? (infTimes.reduce((a,b)=>a+b,0)/infTimes.length).toFixed(1)
+      : "—";
+    sInf.textContent = avgInf + (infTimes.length ? "ms" : "");
+
+    // Inference latency gauge
+    const ms = infMs || 0;
+    bigInf.textContent = ms.toFixed(1);
+    infBar.style.width = Math.min((ms / 100) * 100, 100) + "%";
+    infBar.style.background = ms < 40 ? "var(--accent)" : ms < 80 ? "var(--yellow)" : "var(--accent2)";
+
+    const fps_val = f.average || f.current || 0;
+    perfRating.innerHTML =
+      fps_val >= 20 ? '<span style="color:var(--accent)">✅ Excellent — real-time capable</span>' :
+      fps_val >= 12 ? '<span style="color:var(--yellow)">⚡ Good — usable for detection</span>'  :
+      fps_val >= 5  ? '<span style="color:var(--accent2)">⚠️ Moderate — may feel laggy</span>'  :
+                      '<span style="color:var(--accent2)">❌ Low — not real-time capable</span>';
+  }
+
+  /* Update HUD on video */
+  function updateHUD(preds) {
+    if (preds.length > 0) {
+      hudLabel.textContent = `🔍 ${preds[0].className.split(",")[0]} (${(preds[0].probability*100).toFixed(1)}%)`;
+    }
+    hudFPS.textContent = `FPS: ${fpsTracker.current}`;
+    hudFPS.style.color = fpsColor(fpsTracker.current);
+  }
+
+  /* Draw FPS sparkline */
+  function updateChart() {
+    drawFPSChart(fpsChart, fpsTracker.history, 30);
+  }
+
+  /* Add a log entry every ~30 frames */
+  let logCounter = 0;
+  function addLog(preds, fps, infMs) {
+    logCounter++;
+    if (logCounter % 30 !== 0) return;
+    const label = preds.length ? preds[0].className.split(",")[0] : "—";
+    const entry = { time: now(), label, fps, infMs: infMs.toFixed(1) };
+    logEntries.unshift(entry);
+    if (logEntries.length > 40) logEntries.pop();
+
+    const box = document.getElementById("logBox");
+    box.innerHTML = logEntries.map(e =>
+      `<div class="log-entry">
+        <span class="time">[${e.time}]</span>
+        &nbsp;<span class="label">${e.label}</span>
+        &nbsp;·&nbsp;<span class="fps">FPS:${e.fps}</span>
+        &nbsp;·&nbsp;${e.infMs}ms
+      </div>`
+    ).join("");
+  }
+
+  /* Final analysis report */
+  function updateReport() {
+    const avgFps  = fpsTracker.average;
+    const minFps  = fpsTracker.min === Infinity ? "—" : fpsTracker.min;
+    const maxFps  = fpsTracker.max;
+    const avgInf  = infTimes.length
+      ? (infTimes.reduce((a,b)=>a+b,0)/infTimes.length).toFixed(1) + " ms"
+      : "—";
+    const capable = avgFps >= 15 ? "✅ Yes" : "❌ No";
+    const impact  = avgFps >= 20 ? "Low — GPU accelerated well"
+                  : avgFps >= 10 ? "Medium — CPU bottleneck possible"
+                  : "High — consider reducing input resolution";
+    const rec     = avgFps >= 20
+      ? "MobileNetV2 runs smoothly in real-time on this device."
+      : avgFps >= 10
+      ? "Consider using MobileNetV1 (α=0.5) for faster inference."
+      : "Use throttled inference (every 3rd frame) to reduce CPU load.";
+
+    document.getElementById("r-avg").textContent    = avgFps + " FPS";
+    document.getElementById("r-minmax").textContent = `${minFps} / ${maxFps} FPS`;
+    document.getElementById("r-inf").textContent    = avgInf;
+    document.getElementById("r-frames").textContent = totalFrames;
+    document.getElementById("r-capable").innerHTML  = capable;
+    document.getElementById("r-impact").textContent = impact;
+    document.getElementById("r-recommendation").textContent = rec;
+  }
+</script>
+</body>
+</html>

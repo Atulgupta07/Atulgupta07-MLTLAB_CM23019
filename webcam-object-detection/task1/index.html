@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Webcam Object Detection – MobileNet</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* ── Reset ────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #05080f;
+  --surface:  #0b0f1a;
+  --card:     #0f1422;
+  --border:   #1a2035;
+  --accent:   #00f2fe;
+  --green:    #39ff14;
+  --red:      #ff3860;
+  --yellow:   #ffd60a;
+  --text:     #eef1f8;
+  --muted:    #4a5578;
+  --mono:     'DM Mono', monospace;
+  --sans:     'Rajdhani', sans-serif;
+  --display:  'Bebas Neue', sans-serif;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* animated mesh background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 5%,  rgba(0,242,254,0.07) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 60% at 90% 95%,  rgba(57,255,20,0.05)  0%, transparent 65%),
+    radial-gradient(ellipse 40% 40% at 50% 50%,  rgba(255,54,96,0.04)  0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.06) 2px,
+    rgba(0,0,0,0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Page wrapper ─────────────────────────────────────── */
+.page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 80px;
+}
+
+/* ── Header ───────────────────────────────────────────── */
+.header {
+  text-align: center;
+  margin-bottom: 36px;
+  animation: fadeDown 0.6s ease both;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(0,242,254,0.25);
+  background: rgba(0,242,254,0.06);
+  padding: 5px 16px;
+  border-radius: 99px;
+  margin-bottom: 14px;
+}
+
+.eyebrow .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: blink 1.4s infinite;
+}
+
+h1 {
+  font-family: var(--display);
+  font-size: clamp(3rem, 8vw, 6rem);
+  line-height: 0.92;
+  letter-spacing: 2px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+h1 .hl { color: var(--accent); display: block; }
+
+.subtitle {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+/* ── Main layout ──────────────────────────────────────── */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  width: 100%;
+  max-width: 1000px;
+  animation: fadeUp 0.6s 0.1s ease both;
+}
+
+@media (max-width: 760px) {
+  .main { grid-template-columns: 1fr; }
+}
+
+/* ── Video panel ──────────────────────────────────────── */
+.video-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+}
+
+.video-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.video-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rec-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: all 0.4s;
+}
+.rec-dot.active {
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red);
+  animation: blink 0.9s infinite;
+}
+
+.live-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(255,56,96,0.1);
+  border: 1px solid rgba(255,56,96,0.25);
+  color: var(--red);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.live-badge.show { opacity: 1; }
+
+/* Video wrapper with corner brackets */
+.video-wrap {
+  position: relative;
+  background: #000;
+  aspect-ratio: 4/3;
+}
+
+.video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1); /* mirror */
+}
+
+/* corner brackets */
+.corner {
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: var(--accent);
+  border-style: solid;
+  opacity: 0;
+  transition: opacity 0.4s;
+  z-index: 5;
+}
+.corner.show { opacity: 0.7; }
+.corner.tl { top:10px; left:10px;  border-width: 2px 0 0 2px; }
+.corner.tr { top:10px; right:10px; border-width: 2px 2px 0 0; }
+.corner.bl { bottom:10px; left:10px;  border-width: 0 0 2px 2px; }
+.corner.br { bottom:10px; right:10px; border-width: 0 2px 2px 0; }
+
+/* HUD overlay on video */
+.hud-top-label {
+  position: absolute;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  display: none;
+}
+
+/* Idle placeholder */
+.video-idle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--card);
+}
+
+.idle-icon {
+  font-size: 4rem;
+  opacity: 0.3;
+  animation: float 3s ease-in-out infinite;
+}
+
+.idle-text {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* video footer */
+.video-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--display);
+  font-size: 1.15rem;
+  letter-spacing: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-start {
+  background: var(--green);
+  color: #000;
+}
+.btn-start:hover:not(:disabled) {
+  background: #4fff2a;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(57,255,20,0.3);
+}
+.btn-start:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+.btn-stop {
+  background: rgba(255,56,96,0.12);
+  color: var(--red);
+  border: 1px solid rgba(255,56,96,0.3);
+}
+.btn-stop:hover:not(:disabled) {
+  background: rgba(255,56,96,0.22);
+  transform: translateY(-1px);
+}
+.btn-stop:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Side panel ───────────────────────────────────────── */
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Model status card */
+.status-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.card-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-label::before {
+  content: '';
+  width: 3px; height: 14px;
+  background: var(--accent);
+  border-radius: 99px;
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.status-indicator {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: all 0.4s;
+}
+.status-indicator.loading { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: blink 0.9s infinite; }
+.status-indicator.ready   { background: var(--green);  box-shadow: 0 0 8px var(--green); }
+.status-indicator.error   { background: var(--red); }
+
+/* Predictions card */
+.pred-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  flex: 1;
+}
+
+.pred-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pred-item {
+  position: relative;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.pred-item.rank1 { border-color: rgba(0,242,254,0.3); }
+.pred-item.rank2 { border-color: rgba(57,255,20,0.15); }
+.pred-item.rank3 { border-color: rgba(255,214,10,0.15); }
+
+/* fill bar */
+.pred-fill {
+  position: absolute;
+  left:0; top:0; bottom:0;
+  border-radius: 8px;
+  opacity: 0.07;
+  width: 0%;
+  transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+}
+.rank1 .pred-fill { background: var(--accent); }
+.rank2 .pred-fill { background: var(--green); }
+.rank3 .pred-fill { background: var(--yellow); }
+
+.pred-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pred-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pred-pct {
+  font-family: var(--display);
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rank1 .pred-pct { color: var(--accent); }
+.rank2 .pred-pct { color: var(--green); }
+.rank3 .pred-pct { color: var(--yellow); }
+
+.pred-bar-track {
+  margin-top: 6px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.pred-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  width: 0%;
+  transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+}
+
+.rank1 .pred-bar-fill { background: var(--accent); }
+.rank2 .pred-bar-fill { background: var(--green); }
+.rank3 .pred-bar-fill { background: var(--yellow); }
+
+.placeholder-preds {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 20px 0;
+  line-height: 2;
+}
+
+/* Frames counter card */
+.stats-mini {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mini-stat { text-align: center; }
+.mini-val {
+  font-family: var(--display);
+  font-size: 1.8rem;
+  color: var(--accent);
+  display: block;
+  line-height: 1;
+}
+.mini-val.red { color: var(--red); }
+.mini-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Animations ───────────────────────────────────────── */
+@keyframes fadeDown {
+  from { opacity:0; transform: translateY(-18px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(18px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes float {
+  0%,100%{ transform: translateY(0); }
+  50%    { transform: translateY(-10px); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+.footer {
+  margin-top: 32px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  animation: fadeUp 0.6s 0.3s ease both;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="eyebrow"><span class="dot"></span> TensorFlow.js · MobileNet</div>
+    <h1>WEBCAM<span class="hl">DETECTOR</span></h1>
+    <p class="subtitle">// Real-time object classification · Live webcam feed</p>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main">
+
+    <!-- Left: video -->
+    <div class="video-panel">
+      <div class="video-header">
+        <div class="video-header-left">
+          <div class="rec-dot" id="recDot"></div>
+          CAMERA FEED
+        </div>
+        <div class="live-badge" id="liveBadge">● LIVE</div>
+      </div>
+
+      <div class="video-wrap">
+        <!-- corner brackets -->
+        <div class="corner tl" id="cTL"></div>
+        <div class="corner tr" id="cTR"></div>
+        <div class="corner bl" id="cBL"></div>
+        <div class="corner br" id="cBR"></div>
+
+        <!-- HUD label -->
+        <div class="hud-top-label" id="hudLabel"></div>
+
+        <!-- Idle state -->
+        <div class="video-idle" id="videoIdle">
+          <div class="idle-icon">📷</div>
+          <div class="idle-text">Click START DETECTION</div>
+        </div>
+
+        <video id="webcam" autoplay playsinline muted></video>
+      </div>
+
+      <div class="video-footer">
+        <button class="btn btn-start" id="startBtn" onclick="start()">
+          ▶ START DETECTION
+        </button>
+        <button class="btn btn-stop" id="stopBtn" onclick="stop()" disabled>
+          ■ STOP
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: side panel -->
+    <div class="side-panel">
+
+      <!-- Model status -->
+      <div class="status-card">
+        <div class="card-label">Model Status</div>
+        <div class="status-row">
+          <div class="status-indicator loading" id="statusDot"></div>
+          <span id="statusText" style="font-size:12px">Loading MobileNet…</span>
+        </div>
+      </div>
+
+      <!-- Mini stats -->
+      <div class="stats-mini">
+        <div class="mini-stat">
+          <span class="mini-val" id="frameCount">0</span>
+          <div class="mini-label">Frames</div>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-val red" id="topConf">—</span>
+          <div class="mini-label">Confidence</div>
+        </div>
+      </div>
+
+      <!-- Predictions -->
+      <div class="pred-card">
+        <div class="card-label">Live Predictions</div>
+        <div class="pred-list" id="predList">
+          <div class="placeholder-preds">
+            Start detection to see<br>live predictions here
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">COCO-SSD · 80 Real-world Classes · TensorFlow.js · CO3 – Apply</div>
+</div>
+
+<script>
+  /* ── State ───────────────────────────────────────── */
+  let model;
+  let stream;
+  let running     = false;
+  let frames      = 0;
+  let scoreMap    = {};
+  const SAMPLE_COUNT = 20;   // frames to collect before showing result
+
+  /* ── Element refs ────────────────────────────────── */
+  const video      = document.getElementById("webcam");
+  const startBtn   = document.getElementById("startBtn");
+  const stopBtn    = document.getElementById("stopBtn");
+  const statusDot  = document.getElementById("statusDot");
+  const statusText = document.getElementById("statusText");
+  const predList   = document.getElementById("predList");
+  const frameCount = document.getElementById("frameCount");
+  const topConf    = document.getElementById("topConf");
+  const hudLabel   = document.getElementById("hudLabel");
+  const liveBadge  = document.getElementById("liveBadge");
+  const recDot     = document.getElementById("recDot");
+  const videoIdle  = document.getElementById("videoIdle");
+  const corners    = document.querySelectorAll(".corner");
+
+  /* ── Load COCO-SSD (much more accurate than MobileNet for real objects) ── */
+  async function loadModel() {
+    statusText.textContent = "⏳ Loading COCO-SSD model…";
+    try {
+      model = await cocoSsd.load();
+      statusDot.className    = "status-indicator ready";
+      statusText.textContent = "✅ COCO-SSD ready — click Start";
+    } catch(e) {
+      statusDot.className    = "status-indicator error";
+      statusText.textContent = "❌ Model load failed: " + e.message;
+    }
+  }
+  loadModel();
+
+  /* ── Start webcam ────────────────────────────────── */
+  async function startWebcam() {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => video.play().then(resolve);
+    });
+    await new Promise((resolve) => {
+      if (video.readyState >= 4) { resolve(); return; }
+      video.oncanplaythrough = resolve;
+    });
+  }
+
+  /* ── Detection loop — collects SAMPLE_COUNT frames then stops ── */
+  async function detect() {
+    if (!running) return;
+
+    if (video.readyState < 2 || video.videoWidth === 0) {
+      requestAnimationFrame(detect);
+      return;
+    }
+
+    try {
+      // COCO-SSD returns: [ { class, score, bbox:[x,y,w,h] }, ... ]
+      const detections = await model.detect(video);
+
+      frames++;
+      frameCount.textContent = frames;
+
+      // Accumulate scores — use highest-score detection per class per frame
+      const seen = {};
+      detections.forEach(d => {
+        if (!seen[d.class] || d.score > seen[d.class]) {
+          seen[d.class] = d.score;
+        }
+      });
+
+      Object.entries(seen).forEach(([cls, score]) => {
+        scoreMap[cls] = (scoreMap[cls] || 0) + score;
+      });
+
+      // Update scanning progress
+      const pct = Math.round((frames / SAMPLE_COUNT) * 100);
+      hudLabel.textContent   = `⏳ Scanning… ${pct}%`;
+      statusText.textContent = `📸 Frame ${frames} of ${SAMPLE_COUNT}…`;
+
+    } catch(e) {
+      console.warn("Detection error:", e.message);
+    }
+
+    if (frames >= SAMPLE_COUNT) {
+      running = false;
+      showFinalResult();
+      return;
+    }
+
+    requestAnimationFrame(detect);
+  }
+
+  /* ── Average accumulated scores → final stable result ── */
+  function showFinalResult() {
+    const results = Object.entries(scoreMap)
+      .map(([cls, total]) => ({
+        className:   cls,
+        probability: total / SAMPLE_COUNT    // averaged confidence
+      }))
+      .filter(r => r.probability >= 0.10)    // drop very low confidence items
+      .sort((a, b) => b.probability - a.probability)
+      .slice(0, 3);
+
+    if (results.length === 0) {
+      predList.innerHTML = '<div class="placeholder-preds">🤔 Nothing detected.<br>Try better lighting or hold object closer.</div>';
+      hudLabel.textContent   = "❓ Nothing detected";
+      statusText.textContent = "Try again with better lighting";
+    } else {
+      renderPredictions(results);
+      hudLabel.textContent   = `✅ ${results[0].className}  ${(results[0].probability * 100).toFixed(1)}%`;
+      statusText.textContent = `✅ Done! (averaged ${SAMPLE_COUNT} frames)`;
+      topConf.textContent    = (results[0].probability * 100).toFixed(1) + "%";
+    }
+
+    liveBadge.classList.remove("show");
+    recDot.classList.remove("active");
+    startBtn.disabled  = false;
+    startBtn.innerHTML = "🔄 SCAN AGAIN";
+  }
+
+  /* ── Start ───────────────────────────────────────── */
+  async function start() {
+    if (!model) { statusText.textContent = "⏳ Model still loading…"; return; }
+
+    running  = true;
+    frames   = 0;
+    scoreMap = {};
+
+    startBtn.disabled      = true;
+    startBtn.innerHTML     = '<span class="spinner"></span> STARTING…';
+    statusText.textContent = "🎥 Starting camera…";
+
+    if (!stream || !video.srcObject) {
+      try {
+        await startWebcam();
+      } catch(e) {
+        statusText.textContent = "❌ Camera: " + e.message;
+        startBtn.disabled  = false;
+        startBtn.innerHTML = "▶ START DETECTION";
+        running = false;
+        return;
+      }
+    }
+
+    videoIdle.style.display = "none";
+    hudLabel.style.display  = "block";
+    liveBadge.classList.add("show");
+    recDot.classList.add("active");
+    corners.forEach(c => c.classList.add("show"));
+
+    stopBtn.disabled       = false;
+    startBtn.disabled      = true;
+    startBtn.innerHTML     = "▶ START DETECTION";
+    statusText.textContent = `📸 Scanning ${SAMPLE_COUNT} frames…`;
+    frameCount.textContent = "0";
+    topConf.textContent    = "—";
+    predList.innerHTML     = '<div class="placeholder-preds">⏳ Analysing…<br>Hold object steady</div>';
+
+    detect();
+  }
+
+  /* ── Stop ────────────────────────────────────────── */
+  function stop() {
+    running = false;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    video.srcObject = null;
+
+    videoIdle.style.display = "flex";
+    hudLabel.style.display  = "none";
+    liveBadge.classList.remove("show");
+    recDot.classList.remove("active");
+    corners.forEach(c => c.classList.remove("show"));
+
+    startBtn.disabled      = false;
+    startBtn.innerHTML     = "▶ START DETECTION";
+    stopBtn.disabled       = true;
+    statusText.textContent = "⏹ Stopped.";
+    predList.innerHTML     = '<div class="placeholder-preds">Detection stopped.<br>Click Start to resume.</div>';
+    topConf.textContent    = "—";
+    frameCount.textContent = "0";
+  }
+
+  /* ── Render result cards ─────────────────────────── */
+  const RANKS  = ["rank1", "rank2", "rank3"];
+  const MEDALS = ["🥇", "🥈", "🥉"];
+
+  // COCO-SSD 80 class → emoji map
+  const EMOJI = {
+    person:"🧑", bicycle:"🚲", car:"🚗", motorcycle:"🏍️",
+    airplane:"✈️", bus:"🚌", train:"🚂", truck:"🚚", boat:"⛵",
+    "traffic light":"🚦", "fire hydrant":"🚒", "stop sign":"🛑",
+    bench:"🪑", bird:"🐦", cat:"🐱", dog:"🐶", horse:"🐴",
+    sheep:"🐑", cow:"🐄", elephant:"🐘", bear:"🐻", zebra:"🦓",
+    giraffe:"🦒", backpack:"🎒", umbrella:"☂️", handbag:"👜",
+    tie:"👔", suitcase:"🧳", frisbee:"🥏", skis:"🎿",
+    snowboard:"🏂", "sports ball":"⚽", kite:"🪁", "baseball bat":"⚾",
+    "baseball glove":"🧤", skateboard:"🛹", surfboard:"🏄",
+    "tennis racket":"🎾", bottle:"🍾", "wine glass":"🍷", cup:"☕",
+    fork:"🍴", knife:"🔪", spoon:"🥄", bowl:"🥣", banana:"🍌",
+    apple:"🍎", sandwich:"🥪", orange:"🍊", broccoli:"🥦",
+    carrot:"🥕", "hot dog":"🌭", pizza:"🍕", donut:"🍩", cake:"🎂",
+    chair:"🪑", couch:"🛋️", "potted plant":"🪴", bed:"🛏️",
+    "dining table":"🍽️", toilet:"🚽", tv:"📺", laptop:"💻",
+    mouse:"🖱️", remote:"🎮", keyboard:"⌨️", "cell phone":"📱",
+    microwave:"📡", oven:"🔥", toaster:"🍞", sink:"🚰",
+    refrigerator:"🧊", book:"📚", clock:"🕐", vase:"🏺",
+    scissors:"✂️", "teddy bear":"🧸", "hair drier":"💨",
+    toothbrush:"🪥"
+  };
+
+  function renderPredictions(preds) {
+    predList.innerHTML = "";
+
+    preds.forEach((p, i) => {
+      const pct   = (p.probability * 100).toFixed(1);
+      const name  = p.className;
+      const emoji = EMOJI[name] || "🔍";
+
+      const item = document.createElement("div");
+      item.className = `pred-item ${RANKS[i]}`;
+      item.innerHTML = `
+        <div class="pred-fill"></div>
+        <div class="pred-content">
+          <div class="pred-name">${emoji} ${name}</div>
+          <div class="pred-pct">${pct}%</div>
+        </div>
+        <div class="pred-bar-track">
+          <div class="pred-bar-fill" style="width:0%"></div>
+        </div>`;
+      predList.appendChild(item);
+
+      requestAnimationFrame(() => {
+        item.querySelector(".pred-fill").style.width     = pct + "%";
+        item.querySelector(".pred-bar-fill").style.width = pct + "%";
+      });
+    });
+  }
+</script>
+</body>
+</html>
