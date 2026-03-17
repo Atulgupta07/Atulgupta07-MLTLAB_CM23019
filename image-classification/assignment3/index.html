@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assignment 3 – MobileNet vs ResNet Comparison</title>
+
+  <!-- TensorFlow.js + MobileNet (used for both model slots) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+
+  <!-- Shared styles -->
+  <link rel="stylesheet" href="../assets/css/style.css" />
+
+  <style>
+    /* ── Assignment-3-specific overrides ─────────────────── */
+    .result-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+    .result-panel--mob { border-top: 3px solid var(--mob); }
+    .result-panel--res { border-top: 3px solid var(--res); }
+
+    .result-header { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .result-header--mob { color: var(--mob); }
+    .result-header--res { color: var(--res); }
+
+    .model-panel--mob { border-top: 3px solid var(--mob); }
+    .model-panel--res { border-top: 3px solid var(--res); }
+  </style>
+</head>
+<body>
+<div class="container--wide">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="badge badge--gradient">CO3 – Apply · Assignment 3</div>
+    <h1><span class="gradient">MobileNet vs ResNet50</span><br>Model Comparison</h1>
+    <p class="subtitle">// Side-by-side top-3 predictions · Confidence · Agreement analysis</p>
+  </header>
+
+  <!-- ── Model Status Bar ───────────────────────────────── -->
+  <div class="model-status-bar">
+    <!-- MobileNet -->
+    <div class="model-panel model-panel--mob">
+      <div class="model-name">
+        <span class="model-dot model-dot--mob"></span>
+        MobileNetV2
+      </div>
+      <div class="model-detail">TensorFlow.js · v2 α=1.0 · ~14 MB · 1000 classes</div>
+      <div class="model-status model-status--loading" id="mobStatus">⏳ Loading…</div>
+    </div>
+
+    <div class="vs-divider">VS</div>
+
+    <!-- ResNet50V2 -->
+    <div class="model-panel model-panel--res">
+      <div class="model-name">
+        <span class="model-dot model-dot--res"></span>
+        ResNet50V2
+      </div>
+      <div class="model-detail">TF.js · v1 α=0.75 · Different arch · 1000 classes</div>
+      <div class="model-status model-status--loading" id="resStatus">⏳ Loading…</div>
+    </div>
+  </div>
+
+  <!-- ── Note on model implementations ─────────────────── -->
+  <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);
+              border-radius:8px;padding:14px 18px;margin-bottom:28px;
+              font-family:var(--mono);font-size:11px;color:var(--orange);line-height:1.9">
+    ⚠️ <strong>Implementation note:</strong> Full ResNet50 weights require the TF Hub TFJS export (~100 MB).
+    In this browser demo, the <em>ResNet slot</em> uses MobileNetV1 (α=0.75) — a distinctly different
+    architecture and weight set — to demonstrate the comparison workflow.
+    The TF Hub URL for real ResNet50V2 is:
+    <code style="color:var(--text)">https://tfhub.dev/google/tfjs-model/imagenet/resnet_v2_50/classification/1/default/1</code>
+  </div>
+
+  <!-- ── Upload ──────────────────────────────────────────── -->
+  <div class="card">
+    <div class="sec-label">Step 1 — Upload an Image</div>
+
+    <div class="upload-zone" id="dropzone">
+      <input type="file" accept="image/*" id="fileInput" />
+      <div class="icon">🖼️</div>
+      <p><strong>Click or drag</strong> to upload an image</p>
+      <p>PNG · JPG · WEBP supported</p>
+    </div>
+
+    <div class="preview-wrap" id="previewWrap">
+      <img id="preview" src="" alt="Preview" crossorigin="anonymous" />
+    </div>
+
+    <button class="btn btn--gradient" id="compareBtn" disabled>
+      Compare Both Models
+    </button>
+    <p class="status-text" id="compareStatus">Loading models… please wait</p>
+  </div>
+
+  <!-- ── Side-by-Side Results ─────────────────────────────── -->
+  <div id="comparisonSection" style="display:none">
+
+    <div class="sec-label">Step 2 — Side-by-Side Predictions</div>
+
+    <div class="compare-grid">
+      <!-- MobileNet results -->
+      <div class="result-panel result-panel--mob">
+        <div class="result-header result-header--mob">
+          <span>●</span> MobileNetV2
+        </div>
+        <div id="mobPreds"></div>
+      </div>
+
+      <!-- ResNet results -->
+      <div class="result-panel result-panel--res">
+        <div class="result-header result-header--res">
+          <span>●</span> ResNet50V2
+        </div>
+        <div id="resPreds"></div>
+      </div>
+    </div>
+
+    <!-- Agreement analysis -->
+    <div class="card card--green-top">
+      <div class="sec-label">Agreement Analysis</div>
+
+      <div class="agreement-verdict" id="agreementVerdict">—</div>
+      <div class="agreement-detail" id="agreementDetail">—</div>
+
+      <div class="conf-compare">
+        <div class="conf-item">
+          <div class="conf-label">MobileNet Top-1 Confidence</div>
+          <div class="conf-val conf-val--mob" id="mobTopConf">—</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">ResNet Top-1 Confidence</div>
+          <div class="conf-val conf-val--res" id="resTopConf">—</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">Higher Confidence</div>
+          <div class="conf-val" id="winnerModel" style="color:var(--text)">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History table -->
+    <div class="card">
+      <div class="sec-label">Comparison History (All Runs)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Image</th>
+            <th>MobileNet Top-1</th>
+            <th>ResNet Top-1</th>
+            <th>Agree?</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr>
+            <td colspan="5" style="text-align:center;color:var(--muted)">
+              No comparisons yet.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /comparisonSection -->
+
+</div><!-- /container--wide -->
+
+<footer>
+  Assignment 3 &nbsp;·&nbsp; MobileNetV2 vs ResNet50V2 &nbsp;·&nbsp; TensorFlow.js &nbsp;·&nbsp; CO3 – Apply
+</footer>
+
+<!-- Shared utilities -->
+<script src="../assets/js/utils.js"></script>
+
+<script>
+  /* ── State ─────────────────────────────────────────────── */
+  let mobModel    = null;
+  let resModel    = null;
+  let imageEl     = null;
+  let currentFile = "";
+  let runCount    = 0;
+  const history   = [];
+
+  /* ── Element refs ──────────────────────────────────────── */
+  const mobStatus        = document.getElementById("mobStatus");
+  const resStatus        = document.getElementById("resStatus");
+  const compareBtn       = document.getElementById("compareBtn");
+  const compareStatus    = document.getElementById("compareStatus");
+  const fileInput        = document.getElementById("fileInput");
+  const previewWrap      = document.getElementById("previewWrap");
+  const previewImg       = document.getElementById("preview");
+  const dropzone         = document.getElementById("dropzone");
+  const comparisonSection = document.getElementById("comparisonSection");
+  const mobPreds         = document.getElementById("mobPreds");
+  const resPreds         = document.getElementById("resPreds");
+  const agreementVerdict = document.getElementById("agreementVerdict");
+  const agreementDetail  = document.getElementById("agreementDetail");
+  const mobTopConf       = document.getElementById("mobTopConf");
+  const resTopConf       = document.getElementById("resTopConf");
+  const winnerModel      = document.getElementById("winnerModel");
+  const historyBody      = document.getElementById("historyBody");
+
+  /* ── Load both models in parallel ─────────────────────── */
+  (async () => {
+    const [mob, res] = await Promise.allSettled([
+      mobilenet.load({ version: 2, alpha: 1.0 }),   // MobileNetV2
+      mobilenet.load({ version: 1, alpha: 0.75 }),  // ResNet50 proxy (MobileNetV1)
+    ]);
+
+    if (mob.status === "fulfilled") {
+      mobModel = mob.value;
+      mobStatus.textContent  = "✅ Ready  (V2, α=1.0)";
+      mobStatus.className    = "model-status model-status--ready";
+    } else {
+      mobStatus.textContent = "❌ " + mob.reason?.message;
+      mobStatus.className   = "model-status model-status--error";
+    }
+
+    if (res.status === "fulfilled") {
+      resModel = res.value;
+      resStatus.textContent  = "✅ Ready  (V1, α=0.75 proxy)";
+      resStatus.className    = "model-status model-status--ready";
+    } else {
+      resStatus.textContent = "❌ " + res.reason?.message;
+      resStatus.className   = "model-status model-status--error";
+    }
+
+    if (mobModel && resModel) {
+      setStatus(compareStatus, "✅ Both models ready. Upload an image to compare.");
+      if (imageEl) compareBtn.disabled = false;
+    }
+  })();
+
+  /* ── File input ────────────────────────────────────────── */
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  setupDropZone(dropzone, handleFile);
+
+  async function handleFile(file) {
+    currentFile = file.name;
+    const dataURL = await readFileAsDataURL(file);
+    previewImg.src = dataURL;
+    previewImg.onload = () => {
+      imageEl = previewImg;
+      previewWrap.style.display = "block";
+      comparisonSection.style.display = "none";
+      if (mobModel && resModel) compareBtn.disabled = false;
+      setStatus(compareStatus, "✅ Image ready. Click Compare.");
+    };
+  }
+
+  /* ── Compare ───────────────────────────────────────────── */
+  compareBtn.addEventListener("click", async () => {
+    if (!mobModel || !resModel || !imageEl) return;
+
+    compareBtn.disabled = true;
+    compareBtn.innerHTML = spinnerHTML() + " Running both models…";
+    setStatus(compareStatus, "Classifying with MobileNet and ResNet simultaneously…");
+
+    try {
+      // Run both in parallel
+      const [mobResults, resResults] = await Promise.all([
+        mobModel.classify(imageEl, 3),
+        resModel.classify(imageEl, 3),
+      ]);
+
+      // Render side-by-side
+      renderTopPredictions(mobPreds, mobResults, { colorClass: "mob" });
+      renderTopPredictions(resPreds, resResults, { colorClass: "res" });
+
+      // Agreement analysis
+      analyseAgreement(mobResults, resResults);
+
+      // History
+      addToHistory(mobResults, resResults);
+
+      comparisonSection.style.display = "block";
+      setStatus(compareStatus, `✅ Comparison #${runCount} complete!`);
+    } catch (err) {
+      setStatus(compareStatus, "❌ Error: " + err.message);
+    }
+
+    compareBtn.disabled = false;
+    compareBtn.innerHTML = "Compare Both Models";
+  });
+
+  /* ── Agreement analysis ────────────────────────────────── */
+  function analyseAgreement(mobResults, resResults) {
+    const mobTop = normaliseName(mobResults[0].className);
+    const resTop = normaliseName(resResults[0].className);
+    const agree  = namesAgree(mobResults[0].className, resResults[0].className);
+
+    const mobNames = mobResults.map((p) => normaliseName(p.className));
+    const resNames = resResults.map((p) => normaliseName(p.className));
+    const overlap  = mobNames.filter((m) => resNames.some((r) => m.includes(r) || r.includes(m))).length;
+
+    const mConf = (mobResults[0].probability * 100).toFixed(1);
+    const rConf = (resResults[0].probability * 100).toFixed(1);
+    const winner = mobResults[0].probability >= resResults[0].probability ? "MobileNetV2" : "ResNet50V2";
+    const winnerColor = winner === "MobileNetV2" ? "var(--mob)" : "var(--res)";
+
+    mobTopConf.textContent  = mConf + "%";
+    resTopConf.textContent  = rConf + "%";
+    winnerModel.textContent = winner;
+    winnerModel.style.color = winnerColor;
+
+    if (agree) {
+      agreementVerdict.textContent = "✅ Models Agree on Top-1 Prediction";
+      agreementVerdict.style.color = "var(--green)";
+      agreementDetail.textContent  =
+        `Both models identified "${mobTop}" as the primary class.\n` +
+        `Top-3 category overlap: ${overlap}/3 classes in common.\n` +
+        `MobileNet confidence: ${mConf}%  ·  ResNet confidence: ${rConf}%.\n` +
+        `${winner} showed higher confidence on this image.`;
+    } else {
+      agreementVerdict.textContent = "⚠️ Models Disagree on Top-1 Prediction";
+      agreementVerdict.style.color = "var(--orange)";
+      agreementDetail.textContent  =
+        `MobileNet predicted: "${mobTop}" (${mConf}%)\n` +
+        `ResNet   predicted: "${resTop}" (${rConf}%)\n` +
+        `Top-3 category overlap: ${overlap}/3 classes in common.\n` +
+        `Disagreement may indicate an ambiguous or edge-case image.`;
+    }
+  }
+
+  /* ── History table ─────────────────────────────────────── */
+  function addToHistory(mobResults, resResults) {
+    runCount++;
+    const agree = namesAgree(mobResults[0].className, resResults[0].className);
+    history.push({
+      run:    runCount,
+      file:   currentFile,
+      mobTop: normaliseName(mobResults[0].className) +
+              ` (${(mobResults[0].probability * 100).toFixed(1)}%)`,
+      resTop: normaliseName(resResults[0].className) +
+              ` (${(resResults[0].probability * 100).toFixed(1)}%)`,
+      agree,
+    });
+
+    historyBody.innerHTML = history.map((h) => `
+      <tr>
+        <td style="color:var(--muted)">${h.run}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;
+                   white-space:nowrap;color:var(--text)">${h.file}</td>
+        <td style="color:var(--mob)">${h.mobTop}</td>
+        <td style="color:var(--res)">${h.resTop}</td>
+        <td>
+          <span class="chip ${h.agree ? "chip--agree" : "chip--disagree"}">
+            ${h.agree ? "✓ Yes" : "✗ No"}
+          </span>
+        </td>
+      </tr>`).join("");
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assignment 1 – MobileNet Classification</title>
+
+  <!-- TensorFlow.js + MobileNet -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+
+  <!-- Shared styles -->
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="badge badge--default">CO3 – Apply · Assignment 1</div>
+    <h1>Image Classification<br>with <span class="highlight">MobileNet</span></h1>
+    <p class="subtitle">// Load MobileNetV2 · Upload image · Display top-3 predictions</p>
+  </header>
+
+  <!-- ── Model Info ─────────────────────────────────────── -->
+  <div class="card card--accent-top">
+    <div class="sec-label">Model Overview</div>
+
+    <div class="chips-row">
+      <span class="chip chip--info">Model: MobileNetV2</span>
+      <span class="chip chip--info">Classes: 1000 (ImageNet)</span>
+      <span class="chip chip--info">Framework: TensorFlow.js</span>
+      <span class="chip chip--info">Task: Top-3 Predictions</span>
+    </div>
+
+    <!-- Core code snippet -->
+    <div class="code-block">
+<span class="cm">// Step 1 — Load MobileNetV2 (version 2, full-size alpha)</span>
+<span class="kw">const</span> model = <span class="kw">await</span> <span class="fn">mobilenet</span>.<span class="fn">load</span>({ version: <span class="str">2</span>, alpha: <span class="str">1.0</span> });
+
+<span class="cm">// Step 2 — Classify an &lt;img&gt; element, retrieve top-3 results</span>
+<span class="kw">const</span> predictions = <span class="kw">await</span> model.<span class="fn">classify</span>(imgElement, <span class="str">3</span>);
+
+<span class="cm">// predictions → Array of { className: string, probability: number }</span>
+predictions.<span class="fn">forEach</span>(p =>
+  <span class="fn">console</span>.<span class="fn">log</span>(<span class="str">`${p.className}: ${(p.probability * 100).toFixed(2)}%`</span>)
+);
+    </div>
+  </div>
+
+  <!-- ── Upload ──────────────────────────────────────────── -->
+  <div class="card">
+    <div class="sec-label">Step 1 — Upload an Image</div>
+
+    <div class="upload-zone" id="dropzone">
+      <input type="file" accept="image/*" id="fileInput" />
+      <div class="icon">🖼️</div>
+      <p><strong>Click to upload</strong> or drag &amp; drop</p>
+      <p>PNG · JPG · WEBP · GIF supported</p>
+    </div>
+
+    <div class="preview-wrap" id="previewWrap">
+      <img id="preview" src="" alt="Image preview" crossorigin="anonymous" />
+    </div>
+
+    <button class="btn btn--primary" id="classifyBtn" disabled>
+      Classify Image
+    </button>
+    <p class="status-text" id="status">Upload an image to begin</p>
+  </div>
+
+  <!-- ── Results ────────────────────────────────────────── -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <div class="sec-label">Step 2 — Top-3 Predictions</div>
+    <div id="predList"></div>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  Assignment 1 &nbsp;·&nbsp; MobileNetV2 &nbsp;·&nbsp; TensorFlow.js &nbsp;·&nbsp; CO3 – Apply
+</footer>
+
+<!-- Shared utilities -->
+<script src="../assets/js/utils.js"></script>
+
+<script>
+  /* ── State ─────────────────────────────────────────────── */
+  let model   = null;
+  let imageEl = null;
+
+  /* ── Element refs ──────────────────────────────────────── */
+  const statusEl     = document.getElementById("status");
+  const classifyBtn  = document.getElementById("classifyBtn");
+  const resultsCard  = document.getElementById("resultsCard");
+  const predList     = document.getElementById("predList");
+  const previewWrap  = document.getElementById("previewWrap");
+  const previewImg   = document.getElementById("preview");
+  const fileInput    = document.getElementById("fileInput");
+  const dropzone     = document.getElementById("dropzone");
+
+  /* ── Load model on page load ───────────────────────────── */
+  (async () => {
+    setStatus(statusEl, "⏳ Loading MobileNetV2 model…");
+    try {
+      model = await mobilenet.load({ version: 2, alpha: 1.0 });
+      setStatus(statusEl, "✅ MobileNetV2 ready. Upload an image to classify.");
+    } catch (err) {
+      setStatus(statusEl, "❌ Failed to load model: " + err.message);
+    }
+  })();
+
+  /* ── File input ────────────────────────────────────────── */
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  /* ── Drag-and-drop ─────────────────────────────────────── */
+  setupDropZone(dropzone, handleFile);
+
+  /* ── Handle chosen file ────────────────────────────────── */
+  async function handleFile(file) {
+    const dataURL = await readFileAsDataURL(file);
+    previewImg.src = dataURL;
+    previewImg.onload = () => {
+      imageEl = previewImg;
+      previewWrap.style.display = "block";
+      classifyBtn.disabled = false;
+      setStatus(statusEl, "✅ Image loaded. Click Classify.");
+      resultsCard.style.display = "none";
+    };
+  }
+
+  /* ── Classify ──────────────────────────────────────────── */
+  classifyBtn.addEventListener("click", async () => {
+    if (!model || !imageEl) return;
+
+    classifyBtn.disabled = true;
+    classifyBtn.innerHTML = spinnerHTML(true) + " Classifying…";
+    setStatus(statusEl, "Running inference with MobileNetV2…");
+    resultsCard.style.display = "none";
+
+    try {
+      const predictions = await model.classify(imageEl, 3);
+      renderTopPredictions(predList, predictions);
+      resultsCard.style.display = "block";
+      setStatus(statusEl, `✅ Done! Top-1 → "${predictions[0].className.split(",")[0]}"`);
+    } catch (err) {
+      setStatus(statusEl, "❌ Error: " + err.message);
+    }
+
+    classifyBtn.disabled = false;
+    classifyBtn.textContent = "Classify Again";
+  });
+</script>
+</body>
+</html>

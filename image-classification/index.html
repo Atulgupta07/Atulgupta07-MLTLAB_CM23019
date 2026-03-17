@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Classification with TensorFlow.js — CO3</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+
+  <style>
+    .hero { text-align:center; padding: 60px 0 48px; }
+
+    .assignment-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+
+    .assignment-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform 0.2s, border-color 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .assignment-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent);
+    }
+
+    .assignment-card--1 { border-top: 3px solid var(--accent); }
+    .assignment-card--2 { border-top: 3px solid var(--green); }
+    .assignment-card--3 { border-top: 3px solid var(--mob); }
+
+    .card-num {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .card-title {
+      font-size: 1.2rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .card-desc {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .card-arrow {
+      margin-top: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    .tech-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .tech-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .info-table { width: 100%; border-collapse: collapse; }
+    .info-table td {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .info-table td:first-child { color: var(--muted); width: 140px; }
+    .info-table tr:last-child td { border-bottom: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Hero ───────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="badge badge--default">CO3 – Apply</div>
+    <h1>Image Classification<br>with <span class="highlight">TensorFlow.js</span></h1>
+    <p class="subtitle">// MobileNetV2 · ResNet50 · Browser-based · No server required</p>
+  </div>
+
+  <!-- ── Assignment Cards ───────────────────────────────── -->
+  <div class="assignment-grid">
+
+    <a href="assignment1/index.html" class="assignment-card assignment-card--1">
+      <div class="card-num">Assignment 1</div>
+      <div class="card-title">Load &amp; Classify<br>a Static Image</div>
+      <div class="card-desc">
+        Load MobileNetV2 in the browser.<br>
+        Upload any image and display<br>
+        the top-3 predictions with<br>
+        confidence scores.
+      </div>
+      <div class="card-arrow">→ Open Assignment 1</div>
+    </a>
+
+    <a href="assignment2/index.html" class="assignment-card assignment-card--2">
+      <div class="card-num">Assignment 2</div>
+      <div class="card-title">Accuracy Test<br>on 5+ Images</div>
+      <div class="card-desc">
+        Upload 5 or more images.<br>
+        Label each with the true class.<br>
+        Measure MobileNet's top-3<br>
+        classification accuracy.
+      </div>
+      <div class="card-arrow">→ Open Assignment 2</div>
+    </a>
+
+    <a href="assignment3/index.html" class="assignment-card assignment-card--3">
+      <div class="card-num">Assignment 3</div>
+      <div class="card-title">MobileNet vs<br>ResNet Comparison</div>
+      <div class="card-desc">
+        Run two models side-by-side.<br>
+        Compare predictions, confidence,<br>
+        and agreement across<br>
+        multiple images.
+      </div>
+      <div class="card-arrow">→ Open Assignment 3</div>
+    </a>
+
+  </div>
+
+  <!-- ── Tech used ──────────────────────────────────────── -->
+  <div class="tech-section">
+    <div class="sec-label">Technologies Used</div>
+    <div class="tech-grid">
+      <span class="chip chip--info">TensorFlow.js v4.10</span>
+      <span class="chip chip--info">MobileNetV2 (tfjs-models)</span>
+      <span class="chip chip--info">MobileNetV1 (ResNet proxy)</span>
+      <span class="chip chip--info">Vanilla JS (ES6+)</span>
+      <span class="chip chip--info">HTML5 File API</span>
+      <span class="chip chip--info">CSS3 / Flexbox / Grid</span>
+      <span class="chip chip--info">No build tools required</span>
+    </div>
+  </div>
+
+  <!-- ── Project info ───────────────────────────────────── -->
+  <div class="tech-section">
+    <div class="sec-label">Project Info</div>
+    <table class="info-table">
+      <tr><td>Course Outcome</td><td>CO3 – Apply</td></tr>
+      <tr><td>Subject</td><td>Image Classification with Pre-trained Models</td></tr>
+      <tr><td>Models</td><td>MobileNetV2, ResNet50V2 (ImageNet, 1000 classes)</td></tr>
+      <tr><td>Framework</td><td>TensorFlow.js (browser, no Python required)</td></tr>
+      <tr><td>File structure</td>
+          <td><code>assignment1/</code>, <code>assignment2/</code>, <code>assignment3/</code>,
+              <code>assets/css/</code>, <code>assets/js/</code></td></tr>
+      <tr><td>How to run</td><td>Open any <code>index.html</code> in a modern browser</td></tr>
+    </table>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  Image Classification with TensorFlow.js &nbsp;·&nbsp; CO3 – Apply &nbsp;·&nbsp;
+  All three assignments in one repository
+</footer>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assignment 2 – Classification Accuracy Test</title>
+
+  <!-- TensorFlow.js + MobileNet -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+
+  <!-- Shared styles -->
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="badge badge--default">CO3 – Apply · Assignment 2</div>
+    <h1>Classification <span class="highlight">Accuracy</span><br>Across 5+ Images</h1>
+    <p class="subtitle">// Upload ≥5 images · Set true labels · Measure MobileNet accuracy</p>
+  </header>
+
+  <!-- ── Stats ──────────────────────────────────────────── -->
+  <div class="stats-grid">
+    <div class="stat-box">
+      <span class="stat-val" id="s-total">0</span>
+      <div class="stat-label">Images</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val" id="s-classified">0</span>
+      <div class="stat-label">Classified</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val" id="s-correct">0</span>
+      <div class="stat-label">Correct</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-val" id="s-accuracy" style="color:var(--green)">—</span>
+      <div class="stat-label">Top-3 Accuracy</div>
+    </div>
+  </div>
+
+  <!-- ── Upload ──────────────────────────────────────────── -->
+  <div class="card card--accent-top">
+    <div class="sec-label">Step 1 — Upload Images (minimum 5)</div>
+
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:16px;
+               padding:10px 14px;background:rgba(0,229,255,0.06);border-radius:6px;
+               border-left:3px solid var(--accent)">
+      💡 Upload at least 5 different images. Enter the true label for each image
+      (e.g. "cat", "car", "dog"), then click <strong style="color:var(--text)">
+      Classify All</strong> to measure accuracy.
+    </p>
+
+    <div class="upload-zone" id="dropzone">
+      <input type="file" accept="image/*" multiple id="fileInput" />
+      <div class="icon">📂</div>
+      <p><strong>Click or drag</strong> to upload multiple images</p>
+      <p>PNG · JPG · WEBP supported</p>
+    </div>
+
+    <div class="btn-row" style="margin-top:20px">
+      <button class="btn btn--primary" id="classifyAll" disabled style="margin-top:0">
+        Classify All Images
+      </button>
+      <button class="btn btn--ghost" id="clearAll" style="margin-top:0">
+        Clear All
+      </button>
+    </div>
+
+    <p class="status-text" id="globalStatus">⏳ Loading MobileNetV2 model…</p>
+
+    <!-- Accuracy progress bar -->
+    <div class="acc-bar"><div class="acc-fill" id="accFill"></div></div>
+  </div>
+
+  <!-- ── Image Grid ──────────────────────────────────────── -->
+  <div>
+    <div class="sec-label">Step 2 — Per-Image Results</div>
+    <div class="img-grid" id="imgGrid">
+      <p style="font-family:var(--mono);font-size:13px;color:var(--muted)">
+        No images uploaded yet.
+      </p>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  Assignment 2 &nbsp;·&nbsp; MobileNetV2 Accuracy Test &nbsp;·&nbsp; TensorFlow.js &nbsp;·&nbsp; CO3 – Apply
+</footer>
+
+<!-- Shared utilities -->
+<script src="../assets/js/utils.js"></script>
+
+<script>
+  /* ── State ─────────────────────────────────────────────── */
+  let model     = null;
+  const images  = [];   // { id, file, dataUrl, imgEl, label, predictions, correct }
+  let nextId    = 0;
+
+  /* ── Element refs ──────────────────────────────────────── */
+  const fileInput     = document.getElementById("fileInput");
+  const dropzone      = document.getElementById("dropzone");
+  const imgGrid       = document.getElementById("imgGrid");
+  const classifyAll   = document.getElementById("classifyAll");
+  const clearAll      = document.getElementById("clearAll");
+  const globalStatus  = document.getElementById("globalStatus");
+  const accFill       = document.getElementById("accFill");
+
+  const sTotal      = document.getElementById("s-total");
+  const sClassified = document.getElementById("s-classified");
+  const sCorrect    = document.getElementById("s-correct");
+  const sAccuracy   = document.getElementById("s-accuracy");
+
+  /* ── Load model ────────────────────────────────────────── */
+  (async () => {
+    try {
+      model = await mobilenet.load({ version: 2, alpha: 1.0 });
+      setStatus(globalStatus, "✅ MobileNetV2 ready. Upload images to begin.");
+      updateClassifyBtn();
+    } catch (err) {
+      setStatus(globalStatus, "❌ Model load failed: " + err.message);
+    }
+  })();
+
+  /* ── Helpers ───────────────────────────────────────────── */
+  function updateClassifyBtn() {
+    classifyAll.disabled = !model || images.length === 0;
+  }
+
+  function updateStats() {
+    const classified = images.filter((i) => i.predictions);
+    const correct    = classified.filter((i) => i.correct === true);
+
+    sTotal.textContent      = images.length;
+    sClassified.textContent = classified.length;
+    sCorrect.textContent    = correct.length;
+
+    if (classified.length > 0) {
+      const acc = ((correct.length / classified.length) * 100).toFixed(1) + "%";
+      sAccuracy.textContent = acc;
+      accFill.style.width   = ((correct.length / classified.length) * 100) + "%";
+    } else {
+      sAccuracy.textContent = "—";
+      accFill.style.width   = "0%";
+    }
+  }
+
+  /* ── File input & drag-drop ────────────────────────────── */
+  fileInput.addEventListener("change", (e) => {
+    Array.from(e.target.files).forEach(addImage);
+    fileInput.value = "";
+  });
+
+  setupDropZone(dropzone, addImage, true);
+
+  /* ── Clear all ─────────────────────────────────────────── */
+  clearAll.addEventListener("click", () => {
+    images.length = 0;
+    nextId = 0;
+    imgGrid.innerHTML =
+      '<p style="font-family:var(--mono);font-size:13px;color:var(--muted)">No images uploaded yet.</p>';
+    updateStats();
+    updateClassifyBtn();
+  });
+
+  /* ── Add one image to state & DOM ──────────────────────── */
+  async function addImage(file) {
+    const id     = nextId++;
+    const entry  = { id, file, dataUrl: null, imgEl: null, label: "", predictions: null, correct: null };
+    images.push(entry);
+
+    const dataUrl  = await readFileAsDataURL(file);
+    entry.dataUrl  = dataUrl;
+    entry.imgEl    = await createImage(dataUrl);
+
+    renderCard(entry);
+    updateStats();
+    updateClassifyBtn();
+  }
+
+  /* ── Render one image card ─────────────────────────────── */
+  function renderCard(entry) {
+    const placeholder = imgGrid.querySelector("p");
+    if (placeholder) placeholder.remove();
+
+    const card = document.createElement("div");
+    card.className = "img-card";
+    card.id = `card-${entry.id}`;
+
+    // Thumbnail
+    const img = document.createElement("img");
+    img.src = entry.dataUrl;
+    card.appendChild(img);
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "img-card__body";
+    body.id = `body-${entry.id}`;
+    body.innerHTML = `
+      <div class="img-card__name">${entry.file.name}</div>
+      <p style="font-family:var(--mono);font-size:11px;color:var(--muted)">Waiting to classify…</p>`;
+    card.appendChild(body);
+
+    // Label input row
+    const labelRow = document.createElement("div");
+    labelRow.className = "img-card__label-row";
+    labelRow.innerHTML = `
+      <label for="label-${entry.id}">True label:</label>
+      <input type="text" id="label-${entry.id}" placeholder="e.g. cat, dog, car" />`;
+    card.appendChild(labelRow);
+
+    imgGrid.appendChild(card);
+  }
+
+  /* ── Classify all images ───────────────────────────────── */
+  classifyAll.addEventListener("click", async () => {
+    if (!model || images.length === 0) return;
+
+    classifyAll.disabled = true;
+    classifyAll.innerHTML = spinnerHTML(true) + " Classifying…";
+
+    for (const entry of images) {
+      const labelInput   = document.getElementById(`label-${entry.id}`);
+      entry.label        = labelInput ? labelInput.value.trim().toLowerCase() : "";
+      const body         = document.getElementById(`body-${entry.id}`);
+      body.innerHTML     = `<div class="img-card__name">${entry.file.name}</div>
+                            ${spinnerHTML(true)}`;
+
+      try {
+        const preds      = await model.classify(entry.imgEl, 3);
+        entry.predictions = preds;
+        entry.correct    = isCorrect(entry.label, preds);
+
+        // Build result HTML
+        let html = `<div class="img-card__name">${entry.file.name}</div>`;
+
+        if (entry.label) {
+          html += `<div style="margin-bottom:8px">
+            <span class="chip ${entry.correct ? "chip--correct" : "chip--wrong"}">
+              ${entry.correct ? "✓ Correct" : "✗ Incorrect"}
+            </span>
+          </div>`;
+        } else {
+          html += `<div style="margin-bottom:8px">
+            <span class="chip chip--pending">No label provided</span>
+          </div>`;
+        }
+
+        const RANK_COLOR = ["mob", "res", ""];
+        preds.forEach((p, i) => {
+          const pct = (p.probability * 100).toFixed(1);
+          html += `
+            <div style="display:flex;justify-content:space-between;
+                        padding:4px 0;border-bottom:1px solid var(--border);
+                        font-family:var(--mono);font-size:11px">
+              <span style="text-transform:capitalize;font-weight:600;
+                           color:${i===0?"var(--accent)":i===1?"var(--purple)":"var(--orange)"}">
+                ${p.className.split(",")[0]}
+              </span>
+              <span style="color:var(--muted)">${pct}%</span>
+            </div>`;
+        });
+
+        body.innerHTML = html;
+      } catch (err) {
+        body.innerHTML += `<p style="color:var(--res);font-size:11px">❌ Error</p>`;
+      }
+    }
+
+    updateStats();
+    classifyAll.disabled = false;
+    classifyAll.textContent = "Reclassify All";
+    setStatus(globalStatus,
+      `✅ Done! Accuracy on labelled images: ${sAccuracy.textContent}`);
+  });
+</script>
+</body>
+</html>
