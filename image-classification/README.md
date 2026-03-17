@@ -262,15 +262,7 @@ spinnerHTML(dark)                        // Loading spinner HTML
 4. **File:// protocol** may block CDN requests in some browsers. Use a local server (see [How to Run](#-how-to-run)).
 
 ---
-
-## 👨‍💻 Author
-
-> Replace this section with your details before submitting.
-
-**Name:** Your Name Here  
-**Roll No.:** Your Roll Number  
-**Subject:** Deep Learning / AI Applications  
-**Assignment:** CO3 – Apply  
+  
 
 ---
 
