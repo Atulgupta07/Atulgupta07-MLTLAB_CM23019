@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Task 2 – Evaluation & Confusion Matrix | CO4</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#f5f0e8;--dark:#1a1a14;--accent:#2d6a4f;--accent2:#e8470a;
+  --accent3:#f4a261;--card:#ffffff;--border:#d4c9b5;--muted:#8a7f6e;
+  --success:#16a34a;--warn:#d97706;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--dark);font-family:'DM Sans',sans-serif;min-height:100vh;}
+.topbar{background:var(--dark);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;}
+.topbar a{color:#a09880;text-decoration:none;font-family:'DM Mono',monospace;font-size:12px;}
+.topbar a:hover{color:var(--accent3);}
+.topbar-title{color:var(--accent3);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;}
+.hero-strip{background:var(--accent);color:#fff;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.hero-strip h1{font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:1px;}
+.hero-strip p{font-size:13px;opacity:.85;max-width:560px;}
+.task-badge{background:rgba(255,255,255,.2);padding:6px 16px;border-radius:20px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap;}
+.main{padding:32px;display:flex;flex-direction:column;gap:24px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.card-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.card-head-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.card-head h2{font-size:15px;font-weight:700;}
+.card-head p{font-size:11px;color:var(--muted);margin-top:1px;}
+.card-body{padding:20px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+@media(max-width:800px){.two-col{grid-template-columns:1fr;}}
+
+/* Upload per class */
+.class-upload-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.class-upload-box{flex:1;min-width:160px;border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s;}
+.class-upload-box:hover{border-color:var(--accent);}
+.class-upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.cub-emoji{font-size:24px;margin-bottom:4px;}
+.cub-name{font-size:12px;font-weight:700;}
+.cub-count{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+
+.btn{padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{filter:brightness(1.15);transform:translateY(-1px);}
+.btn-secondary{background:transparent;color:var(--accent2);border:2px solid var(--accent2);}
+.btn-secondary:hover{background:var(--accent2);color:#fff;}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+
+.log{background:#1a1a14;border-radius:10px;padding:14px;font-family:'DM Mono',monospace;font-size:11.5px;min-height:70px;max-height:180px;overflow-y:auto;margin-top:12px;line-height:1.8;}
+.log .ok{color:#4ade80;}.log .err{color:#f87171;}.log .info{color:#fbbf24;}.log .dim{color:#4a4030;}
+
+/* Metrics grid */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+@media(max-width:700px){.metrics-grid{grid-template-columns:repeat(2,1fr);}}
+.metric-card{background:#faf7f2;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;}
+.metric-val{font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;}
+.metric-val.green{color:var(--success);}
+.metric-val.orange{color:var(--warn);}
+.metric-val.blue{color:#2563eb;}
+.metric-val.red{color:var(--accent2);}
+.metric-label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-top:4px;}
+
+/* Confusion Matrix */
+.cm-wrap{overflow-x:auto;}
+.cm-table{border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;margin:0 auto;}
+.cm-table th{padding:10px 14px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:500;}
+.cm-table td{width:80px;height:68px;text-align:center;border:1px solid var(--border);font-size:20px;font-family:'Bebas Neue',sans-serif;position:relative;transition:all .2s;}
+.cm-table td .cell-label{font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-top:2px;font-style:normal;font-weight:400;}
+.cm-axis-label{font-size:11px;color:var(--muted);text-align:center;margin-top:8px;font-family:'DM Mono',monospace;}
+
+/* Per-class table */
+.class-report{width:100%;border-collapse:collapse;font-size:13px;}
+.class-report th{background:#f5f0e8;padding:10px 14px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.class-report td{padding:10px 14px;border-bottom:1px solid var(--border);}
+.bar{height:6px;border-radius:3px;background:var(--accent);display:inline-block;margin-left:6px;vertical-align:middle;}
+
+/* Prediction samples */
+.pred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;margin-top:12px;}
+.pred-item{border-radius:10px;overflow:hidden;border:2px solid var(--border);position:relative;}
+.pred-item img{width:100%;aspect-ratio:1;object-fit:cover;}
+.pred-label{font-size:10px;text-align:center;padding:4px;background:var(--card);font-family:'DM Mono',monospace;}
+.pred-item.correct{border-color:var(--success);}
+.pred-item.wrong  {border-color:var(--accent2);}
+.pred-badge{position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;}
+.pred-badge.c{background:var(--success);}
+.pred-badge.w{background:var(--accent2);}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="../index.html">← Back to Assignment</a>
+  <div class="topbar-title">CO4 — Transfer Learning</div>
+  <a href="../task3_incremental/index.html">Task 3 →</a>
+</div>
+<div class="hero-strip">
+  <div>
+    <h1>Task 2 — Evaluate & Confusion Matrix</h1>
+    <p>Upload validation images per category. The loaded model predicts each one, then we report accuracy, precision, recall, F1 and the full confusion matrix.</p>
+  </div>
+  <div class="task-badge">Step 2 of 3</div>
+</div>
+
+<div class="main">
+
+  <!-- Upload Validation Data -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-head-icon" style="background:#f0fdf4;">📂</div>
+      <div><h2>Validation Dataset</h2><p>Upload images different from training data (2+ per class)</p></div>
+    </div>
+    <div class="card-body">
+      <div class="class-upload-row" id="valUploadRow"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runEvaluation()" id="btnEval">▶ Run Evaluation</button>
+      </div>
+      <div class="log" id="evalLog"><span class="dim">// Upload validation images and click Run Evaluation…</span></div>
+    </div>
+  </div>
+
+  <!-- Metrics + Confusion Matrix -->
+  <div id="resultsSection" style="display:none;">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#fff5f0;">📊</div>
+        <div><h2>Overall Metrics</h2><p>Macro-averaged across all 3 classes</p></div>
+      </div>
+      <div class="card-body">
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="metric-val green" id="mAcc">—</div><div class="metric-label">Accuracy</div></div>
+          <div class="metric-card"><div class="metric-val blue"  id="mPrec">—</div><div class="metric-label">Precision</div></div>
+          <div class="metric-card"><div class="metric-val orange"id="mRec">—</div><div class="metric-label">Recall</div></div>
+          <div class="metric-card"><div class="metric-val red"   id="mF1">—</div><div class="metric-label">F1 Score</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+
+      <!-- Confusion Matrix -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-head-icon" style="background:#fffbeb;">🔢</div>
+          <div><h2>Confusion Matrix</h2><p>Rows = Actual · Cols = Predicted</p></div>
+        </div>
+        <div class="card-body">
+          <div class="cm-wrap">
+            <table class="cm-table" id="cmTable"></table>
+          </div>
+          <div class="cm-axis-label">↑ Actual Class &nbsp;|&nbsp; Predicted Class →</div>
+          <div style="margin-top:14px;font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8;">
+            <div><span style="display:inline-block;width:12px;height:12px;background:#dcfce7;border:1px solid #bbf7d0;border-radius:2px;margin-right:6px;vertical-align:middle;"></span>Diagonal = Correct predictions (TP)</div>
+            <div><span style="display:inline-block;width:12px;height:12px;background:#fee2e2;border:1px solid #fecaca;border-radius:2px;margin-right:6px;vertical-align:middle;"></span>Off-diagonal = Misclassifications</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Per-class report -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-head-icon" style="background:#f0fdf4;">📋</div>
+          <div><h2>Per-Class Report</h2><p>Precision, Recall, F1 per category</p></div>
+        </div>
+        <div class="card-body">
+          <table class="class-report" id="classReport"></table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Prediction Samples -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#fff5f0;">🖼</div>
+        <div><h2>Prediction Samples</h2><p>Green border = correct, Red = wrong</p></div>
+      </div>
+      <div class="card-body">
+        <div class="pred-grid" id="predGrid"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const CATEGORIES = ['Apple','Banana','Orange'];
+const EMOJIS     = ['🍎','🍌','🍊'];
+const valStore   = {0:[],1:[],2:[]};
+let mobileNet    = null;
+let classifier   = null;
+
+// ── Build Upload Boxes ────────────────────────────────────────
+function buildUploadBoxes() {
+  const row = document.getElementById('valUploadRow');
+  CATEGORIES.forEach((cat,i) => {
+    const box = document.createElement('div');
+    box.className = 'class-upload-box';
+    box.id = `valbox${i}`;
+    box.innerHTML = `
+      <input type="file" accept="image/*" multiple onchange="handleValFiles(event,${i})"/>
+      <div class="cub-emoji">${EMOJIS[i]}</div>
+      <div class="cub-name">${cat}</div>
+      <div class="cub-count" id="vcnt${i}">0 images</div>`;
+    row.appendChild(box);
+  });
+}
+
+function handleValFiles(e, i) {
+  Array.from(e.target.files).forEach(f => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      valStore[i].push(ev.target.result);
+      document.getElementById(`vcnt${i}`).textContent = valStore[i].length+' images';
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+// ── Load Models ───────────────────────────────────────────────
+async function loadModels() {
+  log('evalLog','> Loading MobileNet…','info');
+  mobileNet = await mobilenet.load({version:2, alpha:1.0});
+  log('evalLog','> MobileNet ready ✓','ok');
+  log('evalLog','> Loading classifier from LocalStorage…','info');
+  try {
+    classifier = await tf.loadLayersModel('localstorage://co4-classifier');
+    log('evalLog','> Classifier loaded ✓','ok');
+    return true;
+  } catch(e) {
+    // Try incremental model first
+    try {
+      classifier = await tf.loadLayersModel('localstorage://co4-classifier-v2');
+      log('evalLog','> Incremental classifier loaded ✓','ok');
+      return true;
+    } catch(e2) {
+      log('evalLog','> No saved model found. Run Task 1 first!','err');
+      return false;
+    }
+  }
+}
+
+// ── Run Evaluation ────────────────────────────────────────────
+async function runEvaluation() {
+  const totals = CATEGORIES.map((_,i) => valStore[i].length);
+  if(totals.some(n => n < 1)) { log('evalLog','> Upload at least 1 image per class!','err'); return; }
+  document.getElementById('btnEval').disabled = true;
+  document.getElementById('evalLog').innerHTML = '';
+
+  const ok = await loadModels();
+  if(!ok) { document.getElementById('btnEval').disabled=false; return; }
+
+  log('evalLog','> Extracting features from validation images…','info');
+  const allPreds=[], allTrue=[], allSrcs=[];
+
+  for(let ci=0; ci<CATEGORIES.length; ci++) {
+    for(const src of valStore[ci]) {
+      const imgEl = await loadImg(src);
+      const pred  = tf.tidy(() => {
+        const t    = tf.browser.fromPixels(imgEl).resizeBilinear([224,224]).toFloat().div(127.5).sub(1).expandDims(0);
+        const feat = mobileNet.infer(t, true);
+        return classifier.predict(feat);
+      });
+      const probs   = Array.from(await pred.data());
+      const predIdx = probs.indexOf(Math.max(...probs));
+      allPreds.push(predIdx);
+      allTrue.push(ci);
+      allSrcs.push({src, predIdx, trueIdx:ci, probs});
+      pred.dispose();
+    }
+    log('evalLog',`> ${CATEGORIES[ci]}: predicted ${allPreds.filter((_,j)=>allTrue[j]===ci&&allPreds[j]===ci).length}/${valStore[ci].length} correct`,'dim');
+  }
+
+  // Compute metrics
+  const n = CATEGORIES.length;
+  // Confusion matrix
+  const cm = Array.from({length:n},()=>Array(n).fill(0));
+  allPreds.forEach((p,i) => cm[allTrue[i]][p]++);
+
+  const correct = allPreds.filter((p,i)=>p===allTrue[i]).length;
+  const acc = correct/allPreds.length;
+
+  // Per-class
+  const stats = CATEGORIES.map((_,ci) => {
+    const tp = cm[ci][ci];
+    const fp = cm.reduce((s,row,ri)=>ri!==ci?s+row[ci]:s, 0);
+    const fn = cm[ci].reduce((s,v,pi)=>pi!==ci?s+v:s, 0);
+    const prec = tp/(tp+fp) || 0;
+    const rec  = tp/(tp+fn) || 0;
+    const f1   = (prec+rec)>0 ? 2*prec*rec/(prec+rec) : 0;
+    return {tp,fp,fn,prec,rec,f1};
+  });
+
+  const macroPrec = stats.reduce((s,x)=>s+x.prec,0)/n;
+  const macroRec  = stats.reduce((s,x)=>s+x.rec, 0)/n;
+  const macroF1   = stats.reduce((s,x)=>s+x.f1,  0)/n;
+
+  log('evalLog',`> Accuracy: ${(acc*100).toFixed(1)}%  Precision: ${(macroPrec*100).toFixed(1)}%  Recall: ${(macroRec*100).toFixed(1)}%  F1: ${(macroF1*100).toFixed(1)}%`,'ok');
+
+  // Render results
+  document.getElementById('mAcc').textContent  = (acc*100).toFixed(0)+'%';
+  document.getElementById('mPrec').textContent = (macroPrec*100).toFixed(0)+'%';
+  document.getElementById('mRec').textContent  = (macroRec*100).toFixed(0)+'%';
+  document.getElementById('mF1').textContent   = (macroF1*100).toFixed(0)+'%';
+
+  renderCM(cm);
+  renderClassReport(stats);
+  renderPredGrid(allSrcs);
+  document.getElementById('resultsSection').style.display='block';
+  document.getElementById('btnEval').disabled = false;
+}
+
+function renderCM(cm) {
+  const tbl = document.getElementById('cmTable');
+  const n   = cm.length;
+  const max  = Math.max(...cm.flat());
+  let html   = '<tr><th></th>';
+  CATEGORIES.forEach(c => html += `<th>Pred<br/>${c}</th>`);
+  html += '</tr>';
+  cm.forEach((row, ri) => {
+    html += `<tr><th style="text-align:right;padding-right:10px;">Act ${CATEGORIES[ri]}</th>`;
+    row.forEach((val, ci) => {
+      const isDiag = ri===ci;
+      const intensity = max>0 ? val/max : 0;
+      let bg;
+      if(isDiag)  bg = `rgba(34,197,94,${0.15 + intensity*0.6})`;
+      else        bg = val>0 ? `rgba(239,68,68,${0.1 + intensity*0.5})` : '#fafaf8';
+      html += `<td style="background:${bg};font-size:28px;">${val}<em class="cell-label">${isDiag?'✓ TP':'✗'}</em></td>`;
+    });
+    html += '</tr>';
+  });
+  tbl.innerHTML = html;
+}
+
+function renderClassReport(stats) {
+  const tbl = document.getElementById('classReport');
+  let html = '<thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1 Score</th><th>Support</th></tr></thead><tbody>';
+  stats.forEach((s,i) => {
+    const support = s.tp+s.fn;
+    html += `<tr>
+      <td><strong>${EMOJIS[i]} ${CATEGORIES[i]}</strong></td>
+      <td>${(s.prec*100).toFixed(1)}%<span class="bar" style="width:${s.prec*60}px"></span></td>
+      <td>${(s.rec*100).toFixed(1)}%<span class="bar" style="width:${s.rec*60}px;background:#2d6a4f"></span></td>
+      <td>${(s.f1*100).toFixed(1)}%<span class="bar" style="width:${s.f1*60}px;background:#f4a261"></span></td>
+      <td>${support}</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+function renderPredGrid(allSrcs) {
+  const grid = document.getElementById('predGrid');
+  grid.innerHTML = '';
+  allSrcs.forEach(({src, predIdx, trueIdx, probs}) => {
+    const correct = predIdx===trueIdx;
+    const conf    = (Math.max(...probs)*100).toFixed(0);
+    const div     = document.createElement('div');
+    div.className = `pred-item ${correct?'correct':'wrong'}`;
+    div.innerHTML = `
+      <img src="${src}"/>
+      <div class="pred-badge ${correct?'c':'w'}">${correct?'✓':'✗'}</div>
+      <div class="pred-label">
+        <strong>${EMOJIS[predIdx]}${CATEGORIES[predIdx]}</strong><br/>
+        ${conf}% conf
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function loadImg(src){
+  return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src;});
+}
+function log(id,msg,type='info'){
+  const el=document.getElementById(id);
+  const d=document.createElement('div');d.className=type;d.textContent=msg;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+buildUploadBoxes();
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CO4 – Transfer Learning with Images</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #f5f0e8;
+  --dark: #1a1a14;
+  --accent: #e8470a;
+  --accent2: #2d6a4f;
+  --accent3: #f4a261;
+  --card: #ffffff;
+  --border: #d4c9b5;
+  --muted: #8a7f6e;
+  --code: #1a1a14;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--dark);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+/* Grain overlay */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.5;}
+
+.page{position:relative;z-index:1;}
+
+/* Hero */
+.hero{background:var(--dark);color:var(--bg);padding:60px 48px 48px;position:relative;overflow:hidden;}
+.hero::after{content:'TRANSFER\ALEARNING';white-space:pre;font-family:'Bebas Neue',sans-serif;font-size:200px;position:absolute;right:-40px;top:-20px;opacity:.05;line-height:1;pointer-events:none;}
+.hero-badge{display:inline-block;background:var(--accent);color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;padding:5px 12px;border-radius:3px;letter-spacing:2px;text-transform:uppercase;margin-bottom:20px;}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(48px,7vw,96px);line-height:0.95;letter-spacing:1px;margin-bottom:16px;}
+.hero h1 span{color:var(--accent3);}
+.hero p{font-size:16px;color:#a09880;max-width:580px;line-height:1.7;margin-bottom:32px;}
+.hero-meta{display:flex;gap:32px;flex-wrap:wrap;}
+.hero-meta-item{font-family:'DM Mono',monospace;font-size:12px;color:#6a6050;}
+.hero-meta-item strong{color:var(--accent3);display:block;font-size:18px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;}
+
+/* Nav cards */
+.nav-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--border);}
+.nav-card{background:var(--card);border-right:1px solid var(--border);padding:32px 28px;text-decoration:none;color:var(--dark);transition:all .2s;position:relative;overflow:hidden;}
+.nav-card:last-child{border-right:none;}
+.nav-card::before{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .25s;}
+.nav-card:hover{background:#faf7f2;transform:translateY(-3px);}
+.nav-card:hover::before{transform:scaleX(1);}
+.nav-num{font-family:'Bebas Neue',sans-serif;font-size:72px;color:var(--border);line-height:1;margin-bottom:8px;}
+.nav-card:hover .nav-num{color:var(--accent);}
+.nav-title{font-size:15px;font-weight:700;margin-bottom:6px;}
+.nav-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+.nav-arrow{position:absolute;bottom:20px;right:20px;font-size:20px;opacity:0;transition:opacity .2s;}
+.nav-card:hover .nav-arrow{opacity:1;}
+
+/* Main content */
+.content{padding:48px;}
+.section-tag{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:24px;display:flex;align-items:center;gap:12px;}
+.section-tag::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:48px;}
+.info-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;}
+.info-card h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.info-card ul{list-style:none;font-size:13px;color:var(--muted);line-height:2;}
+.info-card ul li::before{content:'→ ';color:var(--accent);}
+
+.arch-visual{background:var(--dark);border-radius:12px;padding:28px;font-family:'DM Mono',monospace;font-size:12px;color:#a09880;}
+.arch-row{display:flex;align-items:center;gap:12px;margin:8px 0;}
+.arch-box{padding:8px 16px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;}
+.arch-frozen{background:#1e3a2e;color:#4ade80;border:1px solid #2d6a4f;}
+.arch-trainable{background:#3a1a0a;color:#fb923c;border:1px solid #7c2d12;}
+.arch-arrow{color:#4a4030;font-size:18px;}
+.arch-label{font-size:10px;color:#4a4030;}
+
+.file-tree{background:var(--code);border-radius:10px;padding:24px;font-family:'DM Mono',monospace;font-size:13px;color:#c9b99a;line-height:2;}
+.ft-dir{color:#f4a261;}
+.ft-html{color:#7dd3fc;}
+.ft-js{color:#fde68a;}
+.ft-md{color:#a3e635;}
+.ft-indent{padding-left:20px;}
+.ft-indent2{padding-left:40px;}
+
+@media(max-width:768px){
+  .nav-grid{grid-template-columns:1fr;}
+  .nav-card{border-right:none;border-bottom:1px solid var(--border);}
+  .overview-grid{grid-template-columns:1fr;}
+  .hero{padding:40px 24px 32px;}
+  .content{padding:28px 20px;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hero">
+    <div class="hero-badge">CO4 – Create</div>
+    <h1>Transfer<br/>Learning<br/><span>With Images</span></h1>
+    <p>Retrain MobileNet for custom fruit classification using TensorFlow.js — entirely in the browser. No server required.</p>
+    <div class="hero-meta">
+      <div class="hero-meta-item"><strong>3</strong>Tasks</div>
+      <div class="hero-meta-item"><strong>MobileNet</strong>Base Model</div>
+      <div class="hero-meta-item"><strong>TF.js</strong>Framework</div>
+      <div class="hero-meta-item"><strong>Browser</strong>Runtime</div>
+    </div>
+  </div>
+
+  <div class="nav-grid">
+    <a class="nav-card" href="task1_retrain/index.html">
+      <div class="nav-num">01</div>
+      <div class="nav-title">Retrain MobileNet</div>
+      <div class="nav-desc">Custom fruit dataset with 3 categories. Upload images, extract MobileNet features, train classifier.</div>
+      <div class="nav-arrow">↗</div>
+    </a>
+    <a class="nav-card" href="task2_evaluation/index.html">
+      <div class="nav-num">02</div>
+      <div class="nav-title">Evaluate & Confusion Matrix</div>
+      <div class="nav-desc">Validate accuracy on held-out data. Generate full confusion matrix with precision/recall/F1.</div>
+      <div class="nav-arrow">↗</div>
+    </a>
+    <a class="nav-card" href="task3_incremental/index.html">
+      <div class="nav-num">03</div>
+      <div class="nav-title">Incremental Learning</div>
+      <div class="nav-desc">Add new fruit categories one at a time. Compare performance before and after each addition.</div>
+      <div class="nav-arrow">↗</div>
+    </a>
+  </div>
+
+  <div class="content">
+    <div class="section-tag">Architecture</div>
+    <div class="overview-grid">
+      <div>
+        <div class="arch-visual">
+          <div style="color:#6a5a40;font-size:11px;margin-bottom:16px;">// MobileNet Transfer Learning Pipeline</div>
+          <div class="arch-row">
+            <div class="arch-box arch-frozen">MobileNet Base (frozen)</div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-label">Feature Extraction<br/>1280-dim vector</div>
+          </div>
+          <div class="arch-row" style="margin-left:20px;color:#4a4030;">↓</div>
+          <div class="arch-row">
+            <div class="arch-box arch-trainable">Dense(128, relu)</div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-label">Trainable Layer</div>
+          </div>
+          <div class="arch-row" style="margin-left:20px;color:#4a4030;">↓</div>
+          <div class="arch-row">
+            <div class="arch-box arch-trainable">Dense(N, softmax)</div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-label">N = num categories</div>
+          </div>
+          <div style="margin-top:20px;font-size:10px;color:#4a4030;">
+            🟢 FROZEN = MobileNet weights locked &nbsp;|&nbsp; 🟠 TRAINABLE = custom layers
+          </div>
+        </div>
+      </div>
+      <div class="info-card">
+        <h3>📁 Project Structure</h3>
+        <div class="file-tree">
+<span class="ft-dir">co4-transfer-learning/</span>
+<div class="ft-indent">
+<span class="ft-html">index.html</span> &nbsp;<span style="color:#4a4030">← this file</span>
+<div><span class="ft-dir">task1_retrain/</span></div>
+<div class="ft-indent"><span class="ft-html">index.html</span></div>
+<div><span class="ft-dir">task2_evaluation/</span></div>
+<div class="ft-indent"><span class="ft-html">index.html</span></div>
+<div><span class="ft-dir">task3_incremental/</span></div>
+<div class="ft-indent"><span class="ft-html">index.html</span></div>
+<div><span class="ft-md">README.md</span></div>
+</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-tag">How to Use</div>
+    <div class="info-card" style="max-width:700px;">
+      <h3>🚀 Getting Started</h3>
+      <ul>
+        <li>Open <strong>Task 1</strong> — upload 5+ images per fruit category (Apple, Banana, Orange)</li>
+        <li>Click <strong>Extract Features</strong> — MobileNet processes each image into a 1280-dim vector</li>
+        <li>Click <strong>Train Classifier</strong> — custom dense layers train on top of features</li>
+        <li>Open <strong>Task 2</strong> — upload a validation set, run evaluation, view confusion matrix</li>
+        <li>Open <strong>Task 3</strong> — add a 4th fruit (Mango), observe accuracy shift</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

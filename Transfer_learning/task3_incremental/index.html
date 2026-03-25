@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Task 3 – Incremental Learning | CO4</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#f5f0e8;--dark:#1a1a14;--accent:#7c3aed;--accent2:#e8470a;
+  --accent3:#f4a261;--card:#ffffff;--border:#d4c9b5;--muted:#8a7f6e;
+  --success:#16a34a;--warn:#d97706;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--dark);font-family:'DM Sans',sans-serif;min-height:100vh;}
+.topbar{background:var(--dark);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;}
+.topbar a{color:#a09880;text-decoration:none;font-family:'DM Mono',monospace;font-size:12px;}
+.topbar a:hover{color:var(--accent3);}
+.topbar-title{color:var(--accent3);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;}
+.hero-strip{background:var(--accent);color:#fff;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.hero-strip h1{font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:1px;}
+.hero-strip p{font-size:13px;opacity:.85;max-width:520px;}
+.task-badge{background:rgba(255,255,255,.2);padding:6px 16px;border-radius:20px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap;}
+.main{padding:32px;display:flex;flex-direction:column;gap:24px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.card-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.card-head-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.card-head h2{font-size:15px;font-weight:700;}
+.card-head p{font-size:11px;color:var(--muted);margin-top:1px;}
+.card-body{padding:20px;}
+
+.btn{padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px);}
+.btn-secondary{background:transparent;color:var(--accent2);border:2px solid var(--accent2);}
+.btn-secondary:hover{background:var(--accent2);color:#fff;}
+.btn-green{background:#16a34a;color:#fff;}
+.btn-green:hover{filter:brightness(1.1);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+
+.log{background:#1a1a14;border-radius:10px;padding:14px;font-family:'DM Mono',monospace;font-size:11.5px;min-height:70px;max-height:180px;overflow-y:auto;margin-top:12px;line-height:1.8;}
+.log .ok{color:#4ade80;}.log .err{color:#f87171;}.log .info{color:#fbbf24;}.log .dim{color:#4a4030;}
+
+/* Timeline of category additions */
+.timeline{display:flex;gap:0;align-items:stretch;flex-wrap:wrap;margin-bottom:20px;}
+.tl-step{flex:1;min-width:120px;padding:16px;border:1px solid var(--border);border-right:none;position:relative;background:#faf7f2;}
+.tl-step:first-child{border-radius:10px 0 0 10px;}
+.tl-step:last-child{border-right:1px solid var(--border);border-radius:0 10px 10px 0;}
+.tl-step.active{background:var(--card);border-color:var(--accent);}
+.tl-step.done{background:#f0fdf4;border-color:#86efac;}
+.tl-num{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--border);}
+.tl-step.active .tl-num,.tl-step.done .tl-num{color:var(--accent);}
+.tl-cats{font-size:11px;font-weight:700;margin:4px 0;}
+.tl-acc{font-size:20px;font-family:'Bebas Neue',sans-serif;color:var(--muted);}
+.tl-step.done .tl-acc{color:var(--success);}
+
+/* New category upload */
+.new-cat-row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px;}
+.new-cat-info{flex:1;min-width:200px;}
+.new-cat-info h3{font-size:15px;font-weight:700;margin-bottom:6px;}
+.new-cat-info p{font-size:12px;color:var(--muted);line-height:1.6;}
+.upload-zone-sm{border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;position:relative;background:#faf7f2;min-width:160px;flex:1;transition:border-color .2s;}
+.upload-zone-sm:hover{border-color:var(--accent);}
+.upload-zone-sm input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+
+/* Comparison chart */
+.compare-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px;}
+@media(max-width:700px){.compare-wrap{grid-template-columns:1fr;}}
+.comp-card{background:#faf7f2;border:1px solid var(--border);border-radius:10px;padding:16px;}
+.comp-title{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+.acc-bar-wrap{margin:8px 0;}
+.acc-bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+.acc-bar-track{height:12px;background:var(--border);border-radius:6px;overflow:hidden;}
+.acc-bar-fill{height:100%;border-radius:6px;transition:width 1s;}
+
+/* Analysis panel */
+.analysis-box{background:var(--dark);color:#c9b99a;border-radius:12px;padding:24px;font-family:'DM Mono',monospace;font-size:12px;line-height:2;}
+.analysis-box .highlight{color:var(--accent3);}
+.analysis-box .good{color:#4ade80;}
+.analysis-box .warn{color:#fbbf24;}
+.analysis-box .bad{color:#f87171;}
+
+/* Per-round metrics */
+.rounds-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'DM Mono',monospace;}
+.rounds-table th{background:#f5f0e8;padding:10px 14px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.rounds-table td{padding:10px 14px;border-bottom:1px solid var(--border);}
+.delta-pos{color:var(--success);font-weight:700;}
+.delta-neg{color:var(--accent2);font-weight:700;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="../index.html">← Back to Assignment</a>
+  <div class="topbar-title">CO4 — Transfer Learning</div>
+  <a href="../task2_evaluation/index.html">← Task 2</a>
+</div>
+<div class="hero-strip">
+  <div>
+    <h1>Task 3 — Incremental Learning</h1>
+    <p>Add new fruit categories one at a time and retrain. Observe how accuracy changes with each addition — does the model remember old classes?</p>
+  </div>
+  <div class="task-badge">Step 3 of 3</div>
+</div>
+
+<div class="main">
+
+  <!-- Timeline -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-head-icon" style="background:#f3e8ff;">🔄</div>
+      <div><h2>Learning Rounds Timeline</h2><p>Each round adds one new fruit category</p></div>
+    </div>
+    <div class="card-body">
+      <div class="timeline" id="timeline">
+        <div class="tl-step done" id="tl0">
+          <div class="tl-num">R0</div>
+          <div class="tl-cats">🍎 Apple<br/>🍌 Banana<br/>🍊 Orange</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">Base model (Task 1)</div>
+          <div class="tl-acc" id="tlacc0">—</div>
+        </div>
+        <div class="tl-step active" id="tl1">
+          <div class="tl-num">R1</div>
+          <div class="tl-cats">+🥭 Mango</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">4 categories</div>
+          <div class="tl-acc" id="tlacc1">—</div>
+        </div>
+        <div class="tl-step" id="tl2">
+          <div class="tl-num">R2</div>
+          <div class="tl-cats">+🍇 Grapes</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">5 categories</div>
+          <div class="tl-acc" id="tlacc2">—</div>
+        </div>
+        <div class="tl-step" id="tl3">
+          <div class="tl-num">R3</div>
+          <div class="tl-cats">+🍓 Strawberry</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">6 categories</div>
+          <div class="tl-acc" id="tlacc3">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add New Category -->
+  <div class="card" id="addCatCard">
+    <div class="card-head">
+      <div class="card-head-icon" style="background:#f3e8ff;">➕</div>
+      <div><h2 id="addCatTitle">Add New Category: 🥭 Mango</h2><p id="addCatSub">Round 1 — expanding from 3 to 4 categories</p></div>
+    </div>
+    <div class="card-body">
+      <div class="new-cat-row">
+        <div class="new-cat-info">
+          <h3 id="newCatName">🥭 Mango</h3>
+          <p>Upload training images for this new fruit. The model will be retrained with ALL existing categories + this new one.<br/><br/>
+          <strong>Key question:</strong> Does adding a new category hurt accuracy on old classes? (Catastrophic Forgetting)</p>
+        </div>
+        <div>
+          <div class="upload-zone-sm" id="newUploadZone">
+            <input type="file" accept="image/*" multiple onchange="handleNewCatFiles(event)"/>
+            <div style="font-size:28px;margin-bottom:6px;" id="newCatEmoji">🥭</div>
+            <div style="font-size:12px;font-weight:700;">Upload images</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px;" id="newCatCountLabel">0 images</div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:var(--muted);">Also upload TEST images per class below:</div>
+        </div>
+      </div>
+
+      <!-- Test images for all current classes -->
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--muted);">Validation images (for all classes after retraining):</div>
+      <div id="valRowInc" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runIncremental()" id="btnInc">⚡ Retrain with New Category</button>
+      </div>
+      <div class="log" id="incLog"><span class="dim">// Upload images and click Retrain…</span></div>
+    </div>
+  </div>
+
+  <!-- Performance Comparison -->
+  <div class="card" id="compCard" style="display:none;">
+    <div class="card-head">
+      <div class="card-head-icon" style="background:#f0fdf4;">📈</div>
+      <div><h2>Performance Analysis</h2><p>Before vs after adding new category</p></div>
+    </div>
+    <div class="card-body">
+      <div class="compare-wrap">
+        <div class="comp-card">
+          <div class="comp-title">// Accuracy by Round</div>
+          <div id="accBars"></div>
+        </div>
+        <div class="comp-card">
+          <div class="comp-title">// Metrics Summary</div>
+          <table class="rounds-table" id="roundsTable"></table>
+        </div>
+      </div>
+      <div class="analysis-box" id="analysisBox" style="margin-top:20px;">
+        <span class="dim">// Analysis loading…</span>
+      </div>
+      <div class="btn-row" id="nextRoundBtns"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const BASE_CATS  = ['Apple','Banana','Orange'];
+const BASE_EMOJIS= ['🍎','🍌','🍊'];
+const NEW_ROUNDS = [
+  {name:'Mango',    emoji:'🥭'},
+  {name:'Grapes',   emoji:'🍇'},
+  {name:'Strawberry',emoji:'🍓'},
+];
+let currentRound  = 1;   // 1 = adding Mango
+let allCats       = [...BASE_CATS];
+let allEmojis     = [...BASE_EMOJIS];
+let mobileNet     = null;
+let classifier    = null;
+let roundResults  = [];   // [{round, numCats, accuracy}]
+const newCatImages= [];   // images for the NEW category
+const valImages   = {};   // {catIdx: [src,...]}
+
+// ── Build val upload boxes ─────────────────────────────────────
+function buildValRow() {
+  const row = document.getElementById('valRowInc');
+  row.innerHTML = '';
+  allCats.forEach((cat,i) => {
+    valImages[i] = valImages[i] || [];
+    const box = document.createElement('div');
+    box.style.cssText='flex:1;min-width:100px;border:2px dashed #d4c9b5;border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;background:#faf7f2;';
+    box.innerHTML=`<input type="file" accept="image/*" multiple onchange="handleValInc(event,${i})" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>
+      <div style="font-size:18px;">${allEmojis[i]}</div>
+      <div style="font-size:10px;font-weight:700;">${cat}</div>
+      <div style="font-size:9px;color:#8a7f6e;font-family:'DM Mono',monospace;" id="vincnt${i}">0 imgs</div>`;
+    row.appendChild(box);
+  });
+}
+
+function handleNewCatFiles(e) {
+  newCatImages.length = 0;
+  Array.from(e.target.files).forEach(f => {
+    const r=new FileReader();
+    r.onload=ev=>{newCatImages.push(ev.target.result);document.getElementById('newCatCountLabel').textContent=newCatImages.length+' images';};
+    r.readAsDataURL(f);
+  });
+}
+function handleValInc(e,i) {
+  valImages[i]=valImages[i]||[];
+  Array.from(e.target.files).forEach(f=>{
+    const r=new FileReader();
+    r.onload=ev=>{valImages[i].push(ev.target.result);document.getElementById(`vincnt${i}`).textContent=valImages[i].length+' imgs';};
+    r.readAsDataURL(f);
+  });
+}
+
+// ── Load MobileNet + base classifier ──────────────────────────
+async function loadModels() {
+  log('incLog','> Loading MobileNet…','info');
+  if(!mobileNet) mobileNet = await mobilenet.load({version:2, alpha:1.0});
+  log('incLog','> MobileNet ready ✓','ok');
+  // Try to load saved model
+  const keys = ['co4-classifier-v2','co4-classifier'];
+  for(const k of keys){
+    try{ classifier=await tf.loadLayersModel('localstorage://'+k); log('incLog',`> Loaded classifier from ${k} ✓`,'ok'); return true; }catch(e){}
+  }
+  log('incLog','> No saved model — run Task 1 first!','err');
+  return false;
+}
+
+// ── Incremental Retrain ────────────────────────────────────────
+async function runIncremental() {
+  if(newCatImages.length < 2) { log('incLog','> Upload at least 2 images for the new category!','err'); return; }
+  document.getElementById('btnInc').disabled = true;
+  document.getElementById('incLog').innerHTML = '';
+
+  const ok = await loadModels();
+  if(!ok){ document.getElementById('btnInc').disabled=false; return; }
+
+  const newCatIdx = allCats.length;  // index of newly added category
+  const newNumCats= newCatIdx + 1;
+  log('incLog',`> Adding category: ${allEmojis[newCatIdx-1]||'?'} ${allCats[allCats.length-1]||'new'} → now ${newNumCats} classes`,'info');
+
+  // Collect ALL training data: for existing cats use val images or whatever we have
+  // We re-collect features for all categories
+  const allFeats=[], allLabels=[];
+
+  // Extract existing cats from valImages (demo: use uploaded val images as train proxy)
+  for(let ci=0; ci<allCats.length-1; ci++){
+    const imgs = valImages[ci]||[];
+    if(imgs.length===0){ log('incLog',`> ⚠ No images for ${allCats[ci]} — skipping (upload val images)`,'dim'); continue; }
+    for(const src of imgs){
+      const imgEl=await loadImg(src);
+      const feat=tf.tidy(()=>{const t=tf.browser.fromPixels(imgEl).resizeBilinear([224,224]).toFloat().div(127.5).sub(1).expandDims(0);return mobileNet.infer(t,true);});
+      allFeats.push(feat); allLabels.push(ci);
+    }
+  }
+  // New category
+  for(const src of newCatImages){
+    const imgEl=await loadImg(src);
+    const feat=tf.tidy(()=>{const t=tf.browser.fromPixels(imgEl).resizeBilinear([224,224]).toFloat().div(127.5).sub(1).expandDims(0);return mobileNet.infer(t,true);});
+    allFeats.push(feat); allLabels.push(allCats.length-1);
+  }
+
+  if(allFeats.length<4){log('incLog','> Too few samples. Upload val images for existing categories too!','err');document.getElementById('btnInc').disabled=false;return;}
+
+  const xs=tf.concat(allFeats);
+  const ys=tf.oneHot(tf.tensor1d(allLabels,'int32'), newNumCats);
+  allFeats.forEach(f=>f.dispose());
+
+  const featDim=xs.shape[1];
+  log('incLog',`> Feature matrix: ${xs.shape[0]} samples × ${featDim} dims`,'info');
+  log('incLog','> Building new classifier head (expanded output)…','info');
+
+  // Build new model with expanded output
+  classifier = tf.sequential({name:'fruit-classifier-inc'});
+  classifier.add(tf.layers.dense({inputShape:[featDim],units:128,activation:'relu'}));
+  classifier.add(tf.layers.dropout({rate:0.3}));
+  classifier.add(tf.layers.dense({units:newNumCats,activation:'softmax'}));
+  classifier.compile({optimizer:tf.train.adam(0.001),loss:'categoricalCrossentropy',metrics:['accuracy']});
+
+  log('incLog','> Training for 60 epochs…','info');
+  const accH=[];
+  await classifier.fit(xs,ys,{
+    epochs:60, batchSize:8, shuffle:true,
+    callbacks:{onEpochEnd:async(ep,logs)=>{
+      accH.push(+(logs.acc||logs.accuracy||0).toFixed(4));
+      if((ep+1)%20===0) log('incLog',`  Epoch ${ep+1}/60 — loss:${logs.loss.toFixed(4)} acc:${((logs.acc||logs.accuracy||0)*100).toFixed(1)}%`,'dim');
+    }}
+  });
+  xs.dispose(); ys.dispose();
+
+  const trainAcc=accH[accH.length-1];
+  log('incLog',`> Retrain complete! Train acc: ${(trainAcc*100).toFixed(1)}%`,'ok');
+
+  // Evaluate on val set
+  let correct=0, total=0;
+  for(let ci=0; ci<newNumCats; ci++){
+    const imgs=ci<allCats.length-1 ? (valImages[ci]||[]) : newCatImages;
+    for(const src of imgs.slice(0,5)){
+      const imgEl=await loadImg(src);
+      const pred=tf.tidy(()=>{const t=tf.browser.fromPixels(imgEl).resizeBilinear([224,224]).toFloat().div(127.5).sub(1).expandDims(0);return classifier.predict(mobileNet.infer(t,true));});
+      const probs=Array.from(await pred.data());
+      pred.dispose();
+      if(probs.indexOf(Math.max(...probs))===ci) correct++;
+      total++;
+    }
+  }
+  const valAcc=total>0?correct/total:trainAcc;
+  log('incLog',`> Validation accuracy: ${(valAcc*100).toFixed(1)}% (${correct}/${total})`, valAcc>0.7?'ok':'warn');
+
+  // Save updated model
+  await classifier.save('localstorage://co4-classifier-v2');
+  log('incLog','> Updated model saved to LocalStorage ✓','ok');
+
+  // Record result
+  roundResults.push({round:currentRound, numCats:newNumCats, trainAcc, valAcc, catAdded:allCats[allCats.length-1]});
+  document.getElementById(`tlacc${currentRound}`).textContent=(valAcc*100).toFixed(0)+'%';
+  document.getElementById(`tl${currentRound}`).className='tl-step done';
+
+  renderComparison();
+  document.getElementById('compCard').style.display='block';
+  document.getElementById('btnInc').disabled=false;
+
+  // Prepare next round
+  currentRound++;
+  if(currentRound <= NEW_ROUNDS.length) {
+    allCats.push(NEW_ROUNDS[currentRound-1].name);
+    allEmojis.push(NEW_ROUNDS[currentRound-1].emoji);
+    document.getElementById(`tl${currentRound}`).className='tl-step active';
+    updateNextRoundUI();
+    newCatImages.length=0;
+    buildValRow();
+  } else {
+    document.getElementById('addCatCard').style.display='none';
+  }
+}
+
+function updateNextRoundUI(){
+  if(currentRound>NEW_ROUNDS.length) return;
+  const r=NEW_ROUNDS[currentRound-1];
+  document.getElementById('addCatTitle').textContent=`Add New Category: ${r.emoji} ${r.name}`;
+  document.getElementById('addCatSub').textContent=`Round ${currentRound} — expanding to ${allCats.length} categories`;
+  document.getElementById('newCatName').textContent=`${r.emoji} ${r.name}`;
+  document.getElementById('newCatEmoji').textContent=r.emoji;
+  document.getElementById('newCatCountLabel').textContent='0 images';
+}
+
+function renderComparison(){
+  // Accuracy bars
+  const bars=document.getElementById('accBars');
+  bars.innerHTML='';
+  roundResults.forEach(r=>{
+    bars.innerHTML+=`<div class="acc-bar-wrap">
+      <div class="acc-bar-label">
+        <span>R${r.round}: +${r.catAdded} (${r.numCats} cats)</span>
+        <strong>${(r.valAcc*100).toFixed(1)}%</strong>
+      </div>
+      <div class="acc-bar-track">
+        <div class="acc-bar-fill" style="width:${r.valAcc*100}%;background:${r.valAcc>0.8?'#16a34a':r.valAcc>0.6?'#d97706':'#e8470a'};"></div>
+      </div>
+    </div>`;
+  });
+
+  // Table
+  const tbl=document.getElementById('roundsTable');
+  let html='<thead><tr><th>Round</th><th>Categories</th><th>Val Acc</th><th>Δ Acc</th></tr></thead><tbody>';
+  roundResults.forEach((r,i)=>{
+    const prev=i>0?roundResults[i-1].valAcc:null;
+    const delta=prev!==null?(r.valAcc-prev)*100:null;
+    const deltaStr=delta===null?'—':delta>=0?`<span class="delta-pos">+${delta.toFixed(1)}%</span>`:`<span class="delta-neg">${delta.toFixed(1)}%</span>`;
+    html+=`<tr><td>R${r.round}</td><td>${r.numCats} classes (+${r.catAdded})</td><td>${(r.valAcc*100).toFixed(1)}%</td><td>${deltaStr}</td></tr>`;
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+
+  // Analysis
+  const lastAcc=roundResults[roundResults.length-1].valAcc;
+  const trend=roundResults.length>1?(lastAcc-roundResults[0].valAcc):0;
+  const box=document.getElementById('analysisBox');
+  box.innerHTML=`
+<span class="highlight">// Performance Analysis — Round ${currentRound-1}</span>
+<br/>
+<span class="dim">──────────────────────────────────</span>
+<br/>
+Current categories: <span class="highlight">${allCats.slice(0,-1).join(', ')}</span>
+<br/>
+Validation accuracy: <span class="${lastAcc>0.8?'good':lastAcc>0.6?'warn':'bad'}">${(lastAcc*100).toFixed(1)}%</span>
+<br/>
+Accuracy trend: <span class="${trend>=0?'good':'bad'}">${trend>=0?'Stable / Improving':'Degrading (possible catastrophic forgetting)'}</span>
+<br/>
+<br/>
+<span class="dim">// Key Observations</span>
+<br/>
+${lastAcc>0.8?'<span class="good">✓ High accuracy maintained after expansion</span>':'<span class="warn">⚠ Accuracy dropped — model may be forgetting old classes</span>'}
+<br/>
+${roundResults.length>1&&Math.abs(trend)<0.05?'<span class="good">✓ Accuracy stable across rounds (good transfer)</span>':''}
+<br/>
+<span class="dim">// Recommendation</span>
+<br/>
+${lastAcc<0.7?'Consider adding more images per class or increasing epochs':'MobileNet features are well-suited for this classification task'}`;
+}
+
+function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src;});}
+function log(id,msg,type='info'){const el=document.getElementById(id);const d=document.createElement('div');d.className=type;d.textContent=msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+
+// Init
+allCats.push(NEW_ROUNDS[0].name);
+allEmojis.push(NEW_ROUNDS[0].emoji);
+buildValRow();
+</script>
+</body>
+</html>

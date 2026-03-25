@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pose Detection Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+  background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+}
+
+#container {
+  position: relative;
+  display: inline-block;
+  margin-top: 20px;
+}
+
+video, canvas {
+  border-radius: 15px;
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+button {
+  margin: 10px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: none;
+  background: #ff7a18;
+  color: white;
+  cursor: pointer;
+}
+
+#info, #score {
+  font-size: 18px;
+  margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧠 Pose Detection Pro</h1>
+
+<div id="container">
+  <video id="video" width="600" height="500" autoplay muted playsinline></video>
+  <canvas id="canvas" width="600" height="500"></canvas>
+</div>
+
+<div>
+  <button onclick="start()">▶ Start</button>
+  <button onclick="stop()">⏹ Stop</button>
+  <button onclick="toggleMode()">🔄 Switch Mode</button>
+</div>
+
+<div id="info">Mode: Single Pose</div>
+<div id="score">Confidence: -</div>
+
+<script>
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let net;
+let stream;
+let running = false;
+let mode = "single";
+let rafId;
+
+// ⚡ Setup Camera (better constraints)
+async function setupCamera() {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: 600,
+      height: 500,
+      facingMode: "user"
+    }
+  });
+
+  video.srcObject = stream;
+
+  return new Promise(resolve => {
+    video.onloadedmetadata = () => resolve(video);
+  });
+}
+
+// ⚡ Load model once (optimized settings)
+async function loadModel() {
+  net = await posenet.load({
+    architecture: "MobileNetV1",
+    outputStride: 16,
+    inputResolution: { width: 600, height: 500 },
+    multiplier: 0.75
+  });
+}
+
+// 🎯 Draw keypoints
+function drawKeypoints(keypoints) {
+  keypoints.forEach(p => {
+    if (p.score > 0.5) {
+      ctx.beginPath();
+      ctx.arc(p.position.x, p.position.y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "#ff0000";
+      ctx.fill();
+    }
+  });
+}
+
+// 🎯 Draw skeleton
+function drawSkeleton(keypoints) {
+  const pairs = posenet.getAdjacentKeyPoints(keypoints, 0.5);
+
+  pairs.forEach(([a, b]) => {
+    ctx.beginPath();
+    ctx.moveTo(a.position.x, a.position.y);
+    ctx.lineTo(b.position.x, b.position.y);
+    ctx.strokeStyle = "#00ff00";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+// 📊 Better confidence calculation
+function getConfidence(keypoints) {
+  const valid = keypoints.filter(k => k.score > 0.3);
+  if (valid.length === 0) return 0;
+
+  const avg = valid.reduce((sum, k) => sum + k.score, 0) / valid.length;
+  return avg.toFixed(2);
+}
+
+// 🚀 Detection loop (optimized)
+async function detect() {
+  if (!running) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  try {
+    if (mode === "single") {
+      const pose = await net.estimateSinglePose(video, {
+        flipHorizontal: true
+      });
+
+      drawKeypoints(pose.keypoints);
+      drawSkeleton(pose.keypoints);
+
+      document.getElementById("score").innerText =
+        "Confidence: " + getConfidence(pose.keypoints);
+
+    } else {
+      const poses = await net.estimateMultiplePoses(video, {
+        flipHorizontal: true,
+        maxDetections: 3,
+        scoreThreshold: 0.5,
+        nmsRadius: 20
+      });
+
+      let total = 0;
+
+      poses.forEach(pose => {
+        drawKeypoints(pose.keypoints);
+        drawSkeleton(pose.keypoints);
+        total += parseFloat(getConfidence(pose.keypoints));
+      });
+
+      const avg = poses.length ? (total / poses.length).toFixed(2) : 0;
+
+      document.getElementById("score").innerText =
+        "Confidence: " + avg + " (avg)";
+    }
+  } catch (err) {
+    console.error("Detection error:", err);
+  }
+
+  rafId = requestAnimationFrame(detect);
+}
+
+// ▶ Start
+async function start() {
+  if (running) return;
+
+  running = true;
+
+  await setupCamera();
+  if (!net) await loadModel();
+
+  video.play();
+  detect();
+}
+
+// ⏹ Stop (FIXED memory leak)
+function stop() {
+  running = false;
+
+  if (rafId) cancelAnimationFrame(rafId);
+
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// 🔄 Toggle mode
+function toggleMode() {
+  mode = (mode === "single") ? "multi" : "single";
+
+  document.getElementById("info").innerText =
+    "Mode: " + (mode === "single" ? "Single Pose" : "Multi Pose");
+}
+
+</script>
+
+</body>
+</html>

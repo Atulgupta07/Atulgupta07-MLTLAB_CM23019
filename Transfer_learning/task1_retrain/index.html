@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Task 1 – Retrain MobileNet | CO4</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#f5f0e8;--dark:#1a1a14;--accent:#e8470a;--accent2:#2d6a4f;
+  --accent3:#f4a261;--card:#ffffff;--border:#d4c9b5;--muted:#8a7f6e;
+  --success:#16a34a;--warn:#d97706;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--dark);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.topbar{background:var(--dark);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;}
+.topbar a{color:#a09880;text-decoration:none;font-family:'DM Mono',monospace;font-size:12px;}
+.topbar a:hover{color:var(--accent3);}
+.topbar-title{color:var(--accent3);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;}
+
+.hero-strip{background:var(--accent);color:#fff;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.hero-strip h1{font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:1px;}
+.hero-strip p{font-size:13px;opacity:.85;max-width:520px;}
+.task-badge{background:rgba(255,255,255,.2);padding:6px 16px;border-radius:20px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap;}
+
+.main{padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+@media(max-width:900px){.main{grid-template-columns:1fr;padding:20px;}}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.card-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.card-head-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.card-head h2{font-size:15px;font-weight:700;}
+.card-head p{font-size:11px;color:var(--muted);margin-top:1px;}
+.card-body{padding:20px;}
+
+/* Category tabs */
+.cat-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+.cat-tab{padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:transparent;transition:all .15s;font-family:'DM Sans',sans-serif;}
+.cat-tab.active{border-color:var(--accent);background:var(--accent);color:#fff;}
+
+/* Upload zone */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;background:#faf7f2;position:relative;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:#fff5f0;}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.upload-icon{font-size:32px;margin-bottom:8px;}
+.upload-text{font-size:13px;font-weight:600;margin-bottom:4px;}
+.upload-sub{font-size:11px;color:var(--muted);}
+
+/* Image previews */
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;margin-top:14px;}
+.preview-item{position:relative;}
+.preview-item img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:2px solid var(--border);}
+.preview-remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:var(--accent);border-radius:50%;border:none;cursor:pointer;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;}
+.count-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-family:'DM Mono',monospace;margin-left:8px;}
+
+/* Steps */
+.steps{display:flex;flex-direction:column;gap:12px;}
+.step-item{display:flex;gap:14px;align-items:flex-start;}
+.step-circle{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;transition:all .3s;}
+.step-circle.active{border-color:var(--accent);background:var(--accent);color:#fff;}
+.step-circle.done{border-color:var(--success);background:var(--success);color:#fff;}
+.step-info h4{font-size:13px;font-weight:700;margin-bottom:2px;}
+.step-info p{font-size:11px;color:var(--muted);}
+
+/* Buttons */
+.btn{padding:11px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#c73d08;transform:translateY(-1px);}
+.btn-secondary{background:transparent;color:var(--accent2);border:2px solid var(--accent2);}
+.btn-secondary:hover{background:var(--accent2);color:#fff;}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+
+/* Log */
+.log{background:#1a1a14;border-radius:10px;padding:14px;font-family:'DM Mono',monospace;font-size:11.5px;min-height:90px;max-height:200px;overflow-y:auto;margin-top:12px;line-height:1.8;}
+.log .ok{color:#4ade80;}.log .err{color:#f87171;}.log .info{color:#fbbf24;}.log .dim{color:#4a4030;}
+
+/* Training chart */
+.chart-wrap{background:#faf7f2;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px;}
+.chart-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;font-family:'DM Mono',monospace;}
+canvas{width:100%!important;}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+.stat-box{background:#faf7f2;border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--accent);}
+.stat-label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px;}
+
+/* Model info table */
+.model-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'DM Mono',monospace;margin-top:12px;}
+.model-table th{background:#f5f0e8;padding:8px 12px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.model-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+.frozen-tag{background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font-size:10px;}
+.train-tag{background:#ffedd5;color:#c2410c;padding:2px 8px;border-radius:10px;font-size:10px;}
+
+.full-col{grid-column:1/-1;}
+.info-note{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:12px;color:#92400e;margin-bottom:14px;line-height:1.6;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="../index.html">← Back to Assignment</a>
+  <div class="topbar-title">CO4 — Transfer Learning</div>
+  <span style="font-family:'DM Mono',monospace;font-size:11px;color:#4a4030" id="tfver">Loading TF.js…</span>
+</div>
+
+<div class="hero-strip">
+  <div>
+    <h1>Task 1 — Retrain MobileNet</h1>
+    <p>Upload images for 3 fruit categories. MobileNet extracts deep features; a custom classifier trains on top.</p>
+  </div>
+  <div class="task-badge">Step 1 of 3</div>
+</div>
+
+<div class="main">
+
+  <!-- LEFT COL: Data Collection -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#fff5f0;">🍎</div>
+        <div>
+          <h2>Dataset Collection</h2>
+          <p>Upload 5+ images per category (more = better accuracy)</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="info-note">
+          💡 <strong>Tip:</strong> Use Google Images or take real photos. Aim for 10–20 images per class. Variety in angle, lighting & background helps generalization.
+        </div>
+        <div class="cat-tabs">
+          <button class="cat-tab active" onclick="switchCat(0)" id="tab0">🍎 Apple <span class="count-badge" id="cnt0">0</span></button>
+          <button class="cat-tab" onclick="switchCat(1)" id="tab1">🍌 Banana <span class="count-badge" id="cnt1">0</span></button>
+          <button class="cat-tab" onclick="switchCat(2)" id="tab2">🍊 Orange <span class="count-badge" id="cnt2">0</span></button>
+        </div>
+        <div id="upload-zones"></div>
+      </div>
+    </div>
+
+    <!-- Architecture Info -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#f0fdf4;">🧠</div>
+        <div><h2>Model Architecture</h2><p>MobileNet V2 + Custom Head</p></div>
+      </div>
+      <div class="card-body">
+        <table class="model-table">
+          <thead><tr><th>Layer</th><th>Output Shape</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Input</td><td>224 × 224 × 3</td><td>—</td></tr>
+            <tr><td>MobileNet Conv Blocks</td><td>7 × 7 × 1280</td><td><span class="frozen-tag">Frozen</span></td></tr>
+            <tr><td>GlobalAveragePooling</td><td>1280</td><td><span class="frozen-tag">Frozen</span></td></tr>
+            <tr><td>Dense(128, ReLU)</td><td>128</td><td><span class="train-tag">Trainable</span></td></tr>
+            <tr><td>Dropout(0.3)</td><td>128</td><td><span class="train-tag">Trainable</span></td></tr>
+            <tr><td>Dense(N, Softmax)</td><td>N classes</td><td><span class="train-tag">Trainable</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COL: Training -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#fffbeb;">⚙️</div>
+        <div><h2>Training Pipeline</h2><p>Feature extraction → classifier training</p></div>
+      </div>
+      <div class="card-body">
+        <div class="steps">
+          <div class="step-item">
+            <div class="step-circle" id="s1">1</div>
+            <div class="step-info">
+              <h4>Load MobileNet</h4>
+              <p>Download pretrained weights from TF Hub (once)</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle" id="s2">2</div>
+            <div class="step-info">
+              <h4>Extract Features</h4>
+              <p>Pass all images through frozen MobileNet → 1280-dim vectors</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle" id="s3">3</div>
+            <div class="step-info">
+              <h4>Train Classifier</h4>
+              <p>Train Dense(128) → Dense(3,softmax) on extracted features</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle" id="s4">4</div>
+            <div class="step-info">
+              <h4>Save Model</h4>
+              <p>Persist to LocalStorage for Task 2 & 3</p>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="loadMobileNet()" id="btnLoad">⬇ Load MobileNet</button>
+          <button class="btn btn-secondary" onclick="extractAndTrain()" id="btnTrain" disabled>▶ Extract & Train</button>
+        </div>
+        <div class="log" id="trainLog"><span class="dim">// Waiting to start…</span></div>
+      </div>
+    </div>
+
+    <!-- Training Chart -->
+    <div class="card" id="chartCard" style="display:none;">
+      <div class="card-head">
+        <div class="card-head-icon" style="background:#f0fdf4;">📈</div>
+        <div><h2>Training Progress</h2><p>Loss & accuracy per epoch</p></div>
+      </div>
+      <div class="card-body">
+        <div class="stats-row" id="statsRow">
+          <div class="stat-box"><div class="stat-val" id="statAcc">—</div><div class="stat-label">Train Acc</div></div>
+          <div class="stat-box"><div class="stat-val" id="statLoss">—</div><div class="stat-label">Final Loss</div></div>
+          <div class="stat-box"><div class="stat-val" id="statEpoch">—</div><div class="stat-label">Epochs</div></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">// accuracy over epochs</div>
+          <canvas id="accChart" height="140"></canvas>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveModelLS()" id="btnSave" disabled>💾 Save to LocalStorage</button>
+          <a href="../task2_evaluation/index.html"><button class="btn btn-secondary">→ Go to Task 2</button></a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────
+const CATEGORIES = ['Apple','Banana','Orange'];
+const EMOJIS     = ['🍎','🍌','🍊'];
+let currentCat   = 0;
+let mobileNet    = null;
+let classifier   = null;
+const dataStore  = {0:[],1:[],2:[]};  // {catIndex: [{img, tensor}]}
+
+// ── Init Upload Zones ────────────────────────────────────────
+function buildUploadZones() {
+  const wrap = document.getElementById('upload-zones');
+  wrap.innerHTML = '';
+  CATEGORIES.forEach((cat, i) => {
+    const zone = document.createElement('div');
+    zone.id = `zone${i}`;
+    zone.style.display = i === 0 ? 'block' : 'none';
+    zone.innerHTML = `
+      <div class="upload-zone" id="dropzone${i}">
+        <input type="file" accept="image/*" multiple onchange="handleFiles(event,${i})"/>
+        <div class="upload-icon">${EMOJIS[i]}</div>
+        <div class="upload-text">Click or drag images for ${cat}</div>
+        <div class="upload-sub">JPEG/PNG · Multiple files OK</div>
+      </div>
+      <div class="preview-grid" id="preview${i}"></div>`;
+    wrap.appendChild(zone);
+  });
+}
+
+function switchCat(i) {
+  currentCat = i;
+  CATEGORIES.forEach((_,j) => {
+    document.getElementById(`zone${j}`).style.display = j===i ? 'block':'none';
+    document.getElementById(`tab${j}`).classList.toggle('active', j===i);
+  });
+}
+
+// ── File Handling ────────────────────────────────────────────
+function handleFiles(e, catIdx) {
+  const files = Array.from(e.target.files);
+  files.forEach(f => addImage(f, catIdx));
+}
+
+function addImage(file, catIdx) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const id = Date.now() + Math.random();
+    dataStore[catIdx].push({id, src: ev.target.result, tensor: null});
+    renderPreviews(catIdx);
+    updateCounts();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPreviews(catIdx) {
+  const grid = document.getElementById(`preview${catIdx}`);
+  grid.innerHTML = '';
+  dataStore[catIdx].forEach((item,i) => {
+    const div = document.createElement('div');
+    div.className = 'preview-item';
+    div.innerHTML = `<img src="${item.src}" /><button class="preview-remove" onclick="removeImg(${catIdx},${i})">×</button>`;
+    grid.appendChild(div);
+  });
+}
+
+function removeImg(catIdx, idx) {
+  dataStore[catIdx].splice(idx, 1);
+  renderPreviews(catIdx);
+  updateCounts();
+}
+
+function updateCounts() {
+  CATEGORIES.forEach((_,i) => {
+    document.getElementById(`cnt${i}`).textContent = dataStore[i].length;
+  });
+}
+
+// ── Step 1: Load MobileNet ───────────────────────────────────
+async function loadMobileNet() {
+  const btn = document.getElementById('btnLoad');
+  btn.disabled = true;
+  log('trainLog','> Loading MobileNet V2 from TF Hub…','info');
+  log('trainLog','> (First load ~8MB — please wait)','dim');
+  try {
+    mobileNet = await mobilenet.load({version:2, alpha:1.0});
+    log('trainLog','> MobileNet loaded ✓','ok');
+    log('trainLog','> Architecture: MobileNetV2 | Alpha: 1.0 | Input: 224×224','dim');
+    setStep(1);
+    document.getElementById('btnTrain').disabled = false;
+  } catch(err) {
+    log('trainLog','> Error: '+err.message,'err');
+    btn.disabled = false;
+  }
+}
+
+// ── Step 2+3: Extract Features & Train ───────────────────────
+async function extractAndTrain() {
+  const totals = CATEGORIES.map((_,i) => dataStore[i].length);
+  if(totals.some(n => n < 2)) {
+    log('trainLog','> Need at least 2 images per category!','err'); return;
+  }
+  document.getElementById('btnTrain').disabled = true;
+  log('trainLog','> Starting feature extraction…','info');
+  setStep(2);
+
+  // Extract features
+  const allFeatures = [], allLabels = [];
+  for(let catIdx=0; catIdx<3; catIdx++){
+    log('trainLog',`> Processing ${CATEGORIES[catIdx]} (${dataStore[catIdx].length} images)…`,'dim');
+    for(const item of dataStore[catIdx]){
+      const imgEl = await loadImgElement(item.src);
+      const feat  = tf.tidy(()=>{
+        const imgT  = tf.browser.fromPixels(imgEl).resizeBilinear([224,224]).toFloat().div(127.5).sub(1).expandDims(0);
+        // Use MobileNet infer to get embedding
+        return mobileNet.infer(imgT, true); // true = get embedding layer
+      });
+      allFeatures.push(feat);
+      allLabels.push(catIdx);
+    }
+    log('trainLog',`> ${CATEGORIES[catIdx]}: features extracted ✓`,'ok');
+  }
+
+  // Stack tensors
+  const xs = tf.concat(allFeatures);
+  const ys = tf.oneHot(tf.tensor1d(allLabels,'int32'), 3);
+  allFeatures.forEach(f=>f.dispose());
+
+  log('trainLog',`> Feature matrix: ${xs.shape[0]} samples × ${xs.shape[1]} dims`,'info');
+  setStep(3);
+
+  // Build classifier head
+  const featDim = xs.shape[1];
+  classifier = tf.sequential({name:'fruit-classifier'});
+  classifier.add(tf.layers.dense({inputShape:[featDim], units:128, activation:'relu', name:'fc1'}));
+  classifier.add(tf.layers.dropout({rate:0.3, name:'dropout1'}));
+  classifier.add(tf.layers.dense({units:3, activation:'softmax', name:'output'}));
+  classifier.compile({
+    optimizer: tf.train.adam(0.001),
+    loss: 'categoricalCrossentropy',
+    metrics: ['accuracy']
+  });
+  log('trainLog','> Classifier built: Dense(128,relu) → Dropout(0.3) → Dense(3,softmax)','info');
+  log('trainLog','> Training for 50 epochs…','info');
+
+  const accHistory=[], lossHistory=[];
+  await classifier.fit(xs, ys, {
+    epochs: 50,
+    batchSize: 8,
+    validationSplit: 0.2,
+    shuffle: true,
+    callbacks:{
+      onEpochEnd: async(ep, logs)=>{
+        accHistory.push(+(logs.acc||logs.accuracy||0).toFixed(4));
+        lossHistory.push(+logs.loss.toFixed(4));
+        if((ep+1)%10===0)
+          log('trainLog',`  Epoch ${ep+1}/50 — loss: ${logs.loss.toFixed(4)}, acc: ${((logs.acc||logs.accuracy||0)*100).toFixed(1)}%`,'dim');
+      }
+    }
+  });
+
+  xs.dispose(); ys.dispose();
+
+  const finalAcc = accHistory[accHistory.length-1];
+  const finalLoss= lossHistory[lossHistory.length-1];
+  log('trainLog',`> Training complete! Final accuracy: ${(finalAcc*100).toFixed(1)}%`,'ok');
+
+  // Update stats & chart
+  document.getElementById('statAcc').textContent  = (finalAcc*100).toFixed(0)+'%';
+  document.getElementById('statLoss').textContent = finalLoss.toFixed(3);
+  document.getElementById('statEpoch').textContent= '50';
+  document.getElementById('chartCard').style.display='block';
+  drawChart(accHistory);
+  setStep(4);
+  document.getElementById('btnSave').disabled = false;
+  document.getElementById('btnTrain').disabled = false;
+}
+
+// ── Step 4: Save ─────────────────────────────────────────────
+async function saveModelLS() {
+  if(!classifier) return;
+  try {
+    await classifier.save('localstorage://co4-classifier');
+    // Save category names & feature dim
+    localStorage.setItem('co4-categories', JSON.stringify(CATEGORIES));
+    localStorage.setItem('co4-numCats', '3');
+    log('trainLog','> Model saved to LocalStorage ✓','ok');
+    log('trainLog','> Keys: co4-classifier, co4-categories','dim');
+    log('trainLog','> Ready for Task 2 (evaluation) and Task 3 (incremental)','ok');
+  } catch(e){
+    log('trainLog','> Save error: '+e.message,'err');
+  }
+}
+
+// ── Chart ─────────────────────────────────────────────────────
+function drawChart(accHistory) {
+  const canvas = document.getElementById('accChart');
+  const ctx    = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * devicePixelRatio;
+  canvas.height= 140 * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const W=canvas.offsetWidth, H=140, pad=30;
+  ctx.clearRect(0,0,W,H);
+  // Axes
+  ctx.strokeStyle='#d4c9b5'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,10); ctx.lineTo(pad,H-pad); ctx.lineTo(W-10,H-pad); ctx.stroke();
+  // Line
+  ctx.strokeStyle='#e8470a'; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  accHistory.forEach((v,i)=>{
+    const x = pad + (i/(accHistory.length-1))*(W-pad-10);
+    const y = (H-pad) - v*(H-pad-10);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // Labels
+  ctx.fillStyle='#8a7f6e'; ctx.font='10px DM Mono,monospace';
+  ctx.fillText('0%',4,H-pad); ctx.fillText('100%',4,15);
+  ctx.fillText('Epoch 1',pad,H-10); ctx.fillText('50',W-22,H-10);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function loadImgElement(src){
+  return new Promise((res,rej)=>{
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>res(img); img.onerror=rej; img.src=src;
+  });
+}
+function log(id,msg,type='info'){
+  const el=document.getElementById(id);
+  const d=document.createElement('div'); d.className=type; d.textContent=msg;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+function setStep(n){
+  [1,2,3,4].forEach(i=>{
+    const el=document.getElementById('s'+i);
+    if(i<n)      { el.classList.add('done');   el.classList.remove('active'); el.textContent='✓'; }
+    else if(i===n){ el.classList.add('active'); el.classList.remove('done');  el.textContent=i;   }
+    else          { el.classList.remove('done','active'); el.textContent=i; }
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+buildUploadZones();
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('tfver').textContent = 'TF.js v'+(tf.version.tfjs||'?');
+});
+</script>
+</body>
+</html>

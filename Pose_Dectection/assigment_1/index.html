@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Squat Counter — Elite Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0a0a0a;
+  --surface:  #111111;
+  --border:   #1f1f1f;
+  --amber:    #f59e0b;
+  --amber2:   #fbbf24;
+  --red:      #ef4444;
+  --green:    #22c55e;
+  --muted:    #404040;
+  --text:     #d4d4d4;
+  --dim:      #737373;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 40px;
+  /* Scanline overlay */
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255,255,255,0.012) 2px,
+    rgba(255,255,255,0.012) 4px
+  );
+}
+
+/* ── Header ── */
+header {
+  width: 860px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-icon {
+  width: 32px; height: 32px;
+  border: 2px solid var(--amber);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.brand-icon svg { width: 18px; height: 18px; }
+
+.brand-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+}
+
+.brand-sub {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--dim);
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.pulse-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.pulse-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity:1; }
+  50% { opacity:0.4; }
+}
+
+/* ── Main layout ── */
+.main {
+  width: 860px;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 700px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── Left panel ── */
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Right panel ── */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Stat card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.card-label {
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+.card-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--amber);
+  letter-spacing: 0.04em;
+}
+
+.card-value.big { font-size: 80px; }
+
+.card-sub {
+  font-size: 9px;
+  color: var(--dim);
+  margin-top: 4px;
+  letter-spacing: 0.1em;
+}
+
+/* Stage indicator */
+.stage-wrap {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.stage-pill {
+  flex: 1;
+  padding: 6px;
+  border-radius: 5px;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-align: center;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: transparent;
+  transition: all 0.2s;
+}
+.stage-pill.active-up   { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.08); }
+.stage-pill.active-down { border-color: var(--red);   color: var(--red);   background: rgba(239,68,68,0.08); }
+
+/* Angle arc */
+.arc-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.arc-svg { overflow: visible; }
+
+.arc-track { fill: none; stroke: var(--border); stroke-width: 6; stroke-linecap: round; }
+.arc-fill  { fill: none; stroke: var(--amber); stroke-width: 6; stroke-linecap: round;
+             transition: stroke-dashoffset 0.15s, stroke 0.2s;
+             transform-origin: center; transform: rotate(-220deg); }
+
+.arc-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 32px;
+  fill: var(--amber);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+.arc-unit {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  fill: var(--dim);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* Feedback bar */
+.feedback {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  background: var(--surface);
+  transition: all 0.2s;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feedback.go   { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.06); }
+.feedback.warn { border-color: var(--amber); color: var(--amber); background: rgba(245,158,11,0.06); }
+.feedback.bad  { border-color: var(--red);   color: var(--red);   background: rgba(239,68,68,0.06); }
+
+/* Rep history */
+.rep-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.rep-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.3s;
+}
+.rep-dot.done { background: var(--amber); box-shadow: 0 0 5px rgba(245,158,11,0.5); }
+
+/* ── Camera stage ── */
+.stage-wrap-cam {
+  position: relative;
+  width: 700px;
+  height: 500px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #000;
+}
+
+#video {
+  position: absolute;
+  top: 0; left: 0;
+  width: 700px; height: 500px;
+  transform: scaleX(-1);
+  display: block;
+}
+
+#canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 700px; height: 500px;
+  pointer-events: none;
+}
+
+/* Corner brackets */
+.bracket {
+  position: absolute;
+  width: 28px; height: 28px;
+  border-color: var(--amber);
+  border-style: solid;
+  border-width: 0;
+  opacity: 0.6;
+  z-index: 5;
+}
+.bracket.tl { top:10px; left:10px;  border-top-width:2px; border-left-width:2px;  border-radius: 3px 0 0 0; }
+.bracket.tr { top:10px; right:10px; border-top-width:2px; border-right-width:2px; border-radius: 0 3px 0 0; }
+.bracket.bl { bottom:10px; left:10px;  border-bottom-width:2px; border-left-width:2px;  border-radius: 0 0 0 3px; }
+.bracket.br { bottom:10px; right:10px; border-bottom-width:2px; border-right-width:2px; border-radius: 0 0 3px 0; }
+
+/* Status bar inside cam */
+.cam-status {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(10,10,10,0.75);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--border);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+}
+
+/* Overlay */
+#overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,10,10,0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 20;
+  border-radius: 10px;
+  transition: opacity 0.4s;
+}
+#overlay.hidden { opacity:0; pointer-events:none; }
+
+.spinner {
+  width: 32px; height: 32px;
+  border: 2px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.overlay-msg {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Rep flash animation */
+@keyframes flash {
+  0%   { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.flash { animation: flash 0.3s ease-out; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 18 18" fill="none">
+        <path d="M9 2 L9 16 M4 6 L14 6 M4 12 L14 12" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">SquatTrack</div>
+      <div class="brand-sub">AI Pose Analysis</div>
+    </div>
+  </div>
+  <div class="header-badge">
+    <div class="pulse-dot" id="liveDot"></div>
+    <span id="statusText">Initializing</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Left panel -->
+  <div class="left-panel">
+
+    <div class="card">
+      <div class="card-label">Total Reps</div>
+      <div class="card-value big" id="countDisplay">0</div>
+      <div class="card-sub">squats completed</div>
+      <div class="stage-wrap">
+        <div class="stage-pill active-up" id="pillUp">↑ Up</div>
+        <div class="stage-pill" id="pillDown">↓ Down</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Rep History</div>
+      <div class="rep-row" id="repRow">
+        <!-- dots filled by JS -->
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Session</div>
+      <div style="display:flex; gap:16px;">
+        <div>
+          <div style="font-family:'Bebas Neue';font-size:28px;color:var(--amber)" id="setCount">1</div>
+          <div style="font-size:8px;color:var(--dim);letter-spacing:0.12em">SET</div>
+        </div>
+        <div>
+          <div style="font-family:'Bebas Neue';font-size:28px;color:var(--amber)" id="timer">0:00</div>
+          <div style="font-size:8px;color:var(--dim);letter-spacing:0.12em">TIME</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Camera -->
+  <div class="stage-wrap-cam">
+    <video id="video" width="700" height="500" autoplay playsinline muted></video>
+    <canvas id="canvas" width="700" height="500"></canvas>
+
+    <div class="bracket tl"></div>
+    <div class="bracket tr"></div>
+    <div class="bracket bl"></div>
+    <div class="bracket br"></div>
+
+    <div class="cam-status">
+      <span>Model: MobileNetV1</span>
+      <span style="margin-left:auto">Stride 16 · Float32</span>
+    </div>
+
+    <div id="overlay">
+      <div class="spinner"></div>
+      <div class="overlay-msg" id="overlayMsg">Requesting camera…</div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel">
+
+    <div class="card arc-wrap">
+      <div class="card-label">Knee Angle</div>
+      <svg class="arc-svg" width="120" height="120" viewBox="0 0 120 120">
+        <circle class="arc-track" cx="60" cy="60" r="46"
+          stroke-dasharray="240" stroke-dashoffset="0"
+          transform="rotate(130 60 60)"/>
+        <circle class="arc-fill" id="arcFill" cx="60" cy="60" r="46"
+          stroke-dasharray="240" stroke-dashoffset="240"
+          transform="rotate(130 60 60)"/>
+        <text class="arc-label" x="60" y="57" id="arcLabel">—</text>
+        <text class="arc-unit"  x="60" y="73">degrees</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Form Feedback</div>
+      <div class="feedback" id="feedback">Waiting for pose…</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Depth Guide</div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:0.1em;color:var(--dim)">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
+          FULL DEPTH &lt; 90°
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:0.1em;color:var(--dim)">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--amber)"></div>
+          PARALLEL 90–120°
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:0.1em;color:var(--dim)">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--red)"></div>
+          STANDING &gt; 150°
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Best Depth</div>
+      <div class="card-value" id="bestAngle">—°</div>
+      <div class="card-sub">lowest angle this session</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Refs ───────────────────────────────────────────────────────────────────────
+const video       = document.getElementById("video");
+const canvas      = document.getElementById("canvas");
+const ctx         = canvas.getContext("2d");
+const countEl     = document.getElementById("countDisplay");
+const overlay     = document.getElementById("overlay");
+const overlayMsg  = document.getElementById("overlayMsg");
+const liveDot     = document.getElementById("liveDot");
+const statusText  = document.getElementById("statusText");
+const arcFill     = document.getElementById("arcFill");
+const arcLabel    = document.getElementById("arcLabel");
+const feedbackEl  = document.getElementById("feedback");
+const pillUp      = document.getElementById("pillUp");
+const pillDown    = document.getElementById("pillDown");
+const repRow      = document.getElementById("repRow");
+const bestAngleEl = document.getElementById("bestAngle");
+const timerEl     = document.getElementById("timer");
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let count = 0, stage = "up", prevKeypoints = [];
+let bestAngle = 999, startTime = Date.now();
+const MAX_DOTS = 20;
+
+// Build rep dots
+for (let i = 0; i < MAX_DOTS; i++) {
+  const d = document.createElement("div");
+  d.className = "rep-dot";
+  d.id = "dot-" + i;
+  repRow.appendChild(d);
+}
+
+// Timer
+setInterval(() => {
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  timerEl.textContent = Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
+}, 1000);
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 700, height: 500, facingMode: "user" },
+    audio: false
+  });
+  video.srcObject = stream;
+  return new Promise(resolve => {
+    video.onloadedmetadata = () => { video.play(); resolve(); };
+  });
+}
+
+// ── Smoothing ─────────────────────────────────────────────────────────────────
+function smooth(keypoints) {
+  if (!prevKeypoints.length) { prevKeypoints = keypoints; return keypoints; }
+  return keypoints.map((kp, i) => {
+    const prev = prevKeypoints[i];
+    return {
+      ...kp,
+      position: {
+        x: 0.7 * kp.position.x + 0.3 * prev.position.x,
+        y: 0.7 * kp.position.y + 0.3 * prev.position.y
+      }
+    };
+  });
+}
+
+// ── Angle ─────────────────────────────────────────────────────────────────────
+function getAngle(A, B, C) {
+  const AB = Math.hypot(B.x-A.x, B.y-A.y);
+  const BC = Math.hypot(B.x-C.x, B.y-C.y);
+  const AC = Math.hypot(C.x-A.x, C.y-A.y);
+  return Math.acos(Math.max(-1, Math.min(1,
+    (AB*AB + BC*BC - AC*AC) / (2*AB*BC)
+  ))) * 180 / Math.PI;
+}
+
+// ── Draw skeleton ─────────────────────────────────────────────────────────────
+function drawSkeleton(keypoints) {
+  const pairs = posenet.getAdjacentKeyPoints(keypoints, 0.6);
+  pairs.forEach(([a, b]) => {
+    ctx.beginPath();
+    ctx.moveTo(a.position.x, a.position.y);
+    ctx.lineTo(b.position.x, b.position.y);
+    ctx.strokeStyle = "rgba(245,158,11,0.7)";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  });
+}
+
+// ── Draw keypoints ────────────────────────────────────────────────────────────
+function drawKeypoints(keypoints) {
+  keypoints.forEach(kp => {
+    if (kp.score > 0.6) {
+      // glow
+      ctx.beginPath();
+      ctx.arc(kp.position.x, kp.position.y, 9, 0, 2*Math.PI);
+      ctx.fillStyle = "rgba(245,158,11,0.15)";
+      ctx.fill();
+      // dot
+      ctx.beginPath();
+      ctx.arc(kp.position.x, kp.position.y, 4, 0, 2*Math.PI);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fill();
+    }
+  });
+}
+
+// ── Update arc UI ─────────────────────────────────────────────────────────────
+const ARC_TOTAL = 240;
+function updateArc(angle) {
+  // 0° = full squat, 180° = standing — map 60→180 to 0→240
+  const pct = Math.max(0, Math.min(1, (angle - 60) / 120));
+  const offset = ARC_TOTAL - pct * ARC_TOTAL;
+  arcFill.style.strokeDashoffset = offset;
+  arcLabel.textContent = isNaN(angle) ? "—" : Math.round(angle);
+
+  // Color by depth
+  if (angle < 90)       arcFill.style.stroke = "#22c55e";
+  else if (angle < 130) arcFill.style.stroke = "#f59e0b";
+  else                  arcFill.style.stroke = "#ef4444";
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+function setFeedback(msg, cls) {
+  feedbackEl.textContent = msg;
+  feedbackEl.className = "feedback " + (cls || "");
+}
+
+// ── Squat counting ────────────────────────────────────────────────────────────
+function countSquats(keypoints) {
+  // Try left side first, fall back to right
+  let hip   = keypoints.find(p => p.part === "leftHip")   || keypoints.find(p => p.part === "rightHip");
+  let knee  = keypoints.find(p => p.part === "leftKnee")  || keypoints.find(p => p.part === "rightKnee");
+  let ankle = keypoints.find(p => p.part === "leftAnkle") || keypoints.find(p => p.part === "rightAnkle");
+
+  if (!hip || !knee || !ankle || hip.score < 0.5 || knee.score < 0.5 || ankle.score < 0.5) {
+    setFeedback("Stand back — full body needed", "warn");
+    arcLabel.textContent = "—";
+    return;
+  }
+
+  const angle = getAngle(hip.position, knee.position, ankle.position);
+  updateArc(angle);
+
+  // Best depth
+  if (angle < bestAngle) {
+    bestAngle = angle;
+    bestAngleEl.textContent = Math.round(bestAngle) + "°";
+  }
+
+  // Feedback
+  if (angle < 90)       setFeedback("Great depth! Full squat ✓", "go");
+  else if (angle < 120) setFeedback("Parallel — go deeper", "warn");
+  else if (angle < 150) setFeedback("Descending…", "");
+  else                  setFeedback("Standing — begin squat", "");
+
+  // Count logic
+  if (angle < 90 && stage === "up") {
+    stage = "down";
+    pillUp.className   = "stage-pill";
+    pillDown.className = "stage-pill active-down";
+  }
+  if (angle > 160 && stage === "down") {
+    stage = "up";
+    pillUp.className   = "stage-pill active-up";
+    pillDown.className = "stage-pill";
+    count++;
+    countEl.textContent = count;
+    countEl.classList.add("flash");
+    setTimeout(() => countEl.classList.remove("flash"), 300);
+    // Light up dot
+    const dot = document.getElementById("dot-" + ((count-1) % MAX_DOTS));
+    if (dot) dot.classList.add("done");
+  }
+
+  // Draw angle label on canvas (knee position)
+  ctx.save();
+  ctx.font = "bold 13px 'DM Mono', monospace";
+  ctx.fillStyle = "#f59e0b";
+  ctx.fillText(Math.round(angle) + "°", knee.position.x + 10, knee.position.y - 8);
+  ctx.restore();
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function main() {
+  try {
+    overlayMsg.textContent = "Requesting camera…";
+    await setupCamera();
+    overlayMsg.textContent = "Loading PoseNet model…";
+
+    const net = await posenet.load({
+      architecture:    "MobileNetV1",
+      outputStride:    16,
+      multiplier:      0.75,
+      inputResolution: { width: 700, height: 500 },
+      quantBytes:      4
+    });
+
+    overlay.classList.add("hidden");
+    liveDot.classList.add("live");
+    statusText.textContent = "Tracking";
+
+    async function detect() {
+      if (video.readyState >= 2) {
+        const pose = await net.estimateSinglePose(video, { flipHorizontal: false });
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Mirror canvas to match CSS-flipped video
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+
+        const kps = smooth(pose.keypoints);
+        drawSkeleton(kps);
+        drawKeypoints(kps);
+        countSquats(kps);
+
+        ctx.restore();
+        prevKeypoints = kps;
+      }
+      requestAnimationFrame(detect);
+    }
+
+    detect();
+
+  } catch (err) {
+    overlayMsg.textContent = "Error: " + err.message;
+    console.error(err);
+  }
+}
+
+main();
+</script>
+</body>
+</html>
